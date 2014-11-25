@@ -1,0 +1,507 @@
+<?php
+
+/**
+ * ProcessWire module to allow site editors to protect pages from guest access.
+ * by Adrian Jones
+ *
+ * Allows site editors to protect pages from guest access.
+ *
+ * ProcessWire 2.x
+ * Copyright (C) 2011 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://www.processwire.com
+ * http://www.ryancramer.com
+ *
+ */
+
+class PageProtector extends WireData implements Module, ConfigurableModule {
+
+	/**
+	 * Basic information about module
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Page Protector',
+			'summary' => 'Allows site editors to protect pages from guest access.',
+			'href' => 'http://modules.processwire.com/modules/page-protector/',
+			'version' => 1,
+			'permanent' => false,
+			'autoload' => true,
+			'singular' => true,
+            'icon' => 'key'
+		);
+	}
+
+
+    /**
+     * Data as used by the get/set functions
+     *
+     */
+    protected $data = array();
+
+
+   /**
+     * Default configuration for module
+     *
+     */
+    static public function getDefaultData() {
+            return array(
+                "protectSite" => 0,
+                "protectedPages" => array(),
+                "message" => "This page protected. You must log in to view it.",
+                "prohibited_message" => "You do not have permission to view this page.",
+                "login_template" => "",
+                "logincss" => "
+.page-protector-container {
+    width: 400px;
+    max-width: 100%;
+    height: 150px;
+    margin: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+p, legend {
+    font-family: Arial, Helvetica, sans-serif;
+    display: block;
+    width: 100%;
+    margin-bottom: 1rem;
+    color: #6F6F6F;
+}
+
+button {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 100%;
+    padding: 0.5em 1em;
+    background-color: #006DD3;
+    color:#fff;
+    text-decoration: none;
+    border: 0 rgba(0,0,0,0);
+    border-radius: 2px;
+}
+button:hover,
+button:focus {
+    background-color: #007DD2;
+}
+button:focus {
+    outline: 0;
+}
+
+input[type='text'],
+input[type='password'] {
+    font-size: 100%;
+    padding: 0.5rem;
+    display: inline-block;
+    border: 1px solid #ccc;
+    box-shadow: inset 0 1px 3px #ddd;
+    border-radius: 4px;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+"
+            );
+    }
+
+
+    /**
+     * Populate the default config data
+     *
+     */
+    public function __construct() {
+       foreach(self::getDefaultData() as $key => $value) {
+               $this->$key = $value;
+       }
+    }
+
+
+	/**
+	 * Initialize the module and setup hooks
+	 */
+	public function init() {
+
+        $this->config->styles->add($this->config->urls->PageProtector . "PageProtector.css");
+
+        if($this->user->hasPermission("page-edit-protected")) {
+            $this->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
+            $this->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
+        }
+
+        if(empty($this->data['protectedPages'])) return; // no pages protected so can escape now
+
+        // if we get this far then add hook on page render to see if the page should be protected
+        $this->addHookAfter('Page::render', $this, 'protectedCheck');
+
+	}
+
+
+    public function isProtected() {
+        $pagesToCheck = array();
+        $matchedParent = "";
+        $p = wire('page');
+        $pagesToCheck[] = $p->id; // include current page
+        foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
+        foreach($pagesToCheck as $ptc){
+            if(array_key_exists($ptc, $this->data['protectedPages'])) {
+                // if we have a protected match for the current page or one of its parents have specified to protect its children
+                if($p->id == $ptc || ($p->id != $ptc && $this->data['protectedPages'][$ptc]['children'] == 1)){
+                    $matchedParent = $ptc;
+                    break; // we have a match so no need to check other parents
+                }
+            }
+        }
+        return $matchedParent;
+    }
+
+
+    /**
+     * Checks if page is protected and show login form if necessary
+     *
+     * @param HookEvent $event
+     */
+    public function protectedCheck(HookEvent $event) {
+
+        if($this->page->template == 'admin') return; // ignore admin pages including admin login page
+        if($this->isProtected() == "") return; // if no matches, then escape now
+
+        $matchedParent = $this->isProtected();
+
+        if($this->user->isLoggedin()){
+            if($this->data['protectedPages'][$matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$matchedParent]['roles']))) {
+                if($this->data['login_template'] != '') {
+                    // using template login form
+                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message'])));
+                }
+                else {
+                    // no template form provided so hijack page output and display plain text message
+                    $event->return = "
+                    <!DOCTYPE html>
+                        <head>
+                            <meta charset='utf-8' />
+                            <style>
+                                {$this->data['logincss']}
+                            </style>
+                        </head>
+                        <body>
+                            <div class='page-protector-container'>
+                            <p>" .
+                                nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message']) .
+                            "</p>
+                            </div>
+                        </body>
+                    </html>";
+                }
+            }
+        }
+        elseif($this->input->post->username && $this->input->post->pass) {
+            $username = $this->sanitizer->username($this->input->post->username);
+            $this->session->login($username, $this->input->post->pass);
+            $this->session->redirect($this->page->url);
+        }
+        else{
+
+            $loginForm = "
+                <style>
+                    {$this->data['logincss']}
+                </style>
+                <form class='PageProtectorForm' action='./' method='post'>
+                        <legend>" . (isset($this->data['protectedPages'][$matchedParent]['message_override']) ? nl2br($this->data['protectedPages'][$matchedParent]['message_override']) : nl2br($this->data['message'])) . "</legend>
+                        <input type='text' name='username' placeholder='Username'>
+                        <input type='password' name='pass' placeholder='Password'>
+                        <p><button type='submit' name='login'>Login</button></p>
+                </form>
+            ";
+
+            if($this->data['login_template'] == ''){
+                $event->return = "
+                <!DOCTYPE html>
+                    <head>
+                        <meta charset='utf-8' />
+                    </head>
+                    <body>
+                        <div class='page-protector-container'>
+                            $loginForm
+                        </div>
+                    </body>
+                </html>
+                ";
+            }
+            else{
+                $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => $loginForm));
+            }
+        }
+    }
+
+
+
+    public function buildPageProtectForm(HookEvent $event){
+
+        $p = $event->object->getPage();
+
+        $inputfields = $event->return;
+
+        $fieldset = $this->modules->get("InputfieldFieldset");
+        $fieldset->attr('id', 'protect_fieldset');
+        $fieldset->label = __("Protect this page");
+        $fieldset->collapsed = Inputfield::collapsedBlank;
+
+        if($this->isProtected() != "") {
+            $f = wire('modules')->get("InputfieldMarkup");
+            $f->attr('name', 'already_protected');
+            $f->label = __('Already Protected');
+            $f->value = "
+            <p>This page is already protected via its parent: " . wire('pages')->get($this->isProtected())->title . "</p>
+            <p>However, you can still apply more specific protection to certain roles with the settings below.</p>
+            ";
+            $fieldset->append($f);
+        }
+
+        $f = $this->modules->get('InputfieldCheckbox');
+        $f->label = __('Protect this page');
+        $f->description = __('If checked, front-end viewing of this page will be limited to logged in users with one of the selected roles.');
+        $f->attr('name', 'page_protected');
+        $f->attr('checked', isset($this->data['protectedPages']) && array_key_exists($p->id, $this->data['protectedPages']) ? 'checked' : '' );
+        $fieldset->append($f);
+
+        $f = $this->modules->get('InputfieldCheckbox');
+        $f->attr('name', 'children_protected');
+        $f->label = __('Protect children');
+        $f->showIf = "page_protected=1";
+        $f->description = __('If checked, viewing of all children of this page will also be protected.');
+        $f->attr('checked', isset($this->data['protectedPages'][$p->id]['children']) && $this->data['protectedPages'][$p->id]['children'] == 1 ? 'checked' : '' );
+        $fieldset->append($f);
+
+        $f = wire('modules')->get("InputfieldTextarea");
+        $f->attr('name', 'message_override');
+        $f->label = __('Message');
+        $f->showIf = "page_protected=1";
+        $f->description = __('This message will be displayed to users when they try to view the site.');
+        $f->notes = __('This page specific message overrides the default one in the module config settings.');
+        $f->value = isset($this->data['protectedPages'][$p->id]['message_override']) ? $this->data['protectedPages'][$p->id]['message_override'] : $this->data['message'];
+        $fieldset->add($f);
+
+        $f = $this->modules->get("InputfieldAsmSelect");
+        $f->name = 'allowed_roles';
+        $f->label = 'Allowed Roles';
+        $f->showIf = "page_protected=1";
+        $f->description = __("To limit access to specific roles, select them here.\nTo allow all roles, leave none selected.");
+        $f->notes = __("NB The users with these roles still need to log in to view the page.\nThis allows you to completely block the unselected roles from viewing the page, even if they are logged in.");
+        foreach($this->roles as $role){
+            $f->addOption($role->name, $role->name);
+            if(isset($this->data['protectedPages'][$p->id]['roles']) && in_array($role->name, $this->data['protectedPages'][$p->id]['roles'])) $f->attr('value', $role->name);
+        }
+        $f->setAsmSelectOption('sortable', false);
+        $fieldset->append($f);
+
+
+        $f = wire('modules')->get("InputfieldTextarea");
+        $f->attr('name', 'prohibited_message');
+        $f->label = __('Prohibited Message');
+        $f->showIf = "page_protected=1";
+        $f->description = __('This message will be displayed to logged in users when they try to view a page that their role doesn\'t have permission to view.');
+        $f->value = isset($this->data['protectedPages'][$p->id]['prohibited_message']) &&  $this->data['protectedPages'][$p->id]['prohibited_message'] != '' ? $this->data['protectedPages'][$p->id]['prohibited_message'] : 'You do not have permission to view this page.';
+        $fieldset->add($f);
+
+
+        $inputfields->append($fieldset);
+
+    }
+
+
+
+    public function processPageProtectForm(HookEvent $event){
+
+        // ProcessPageEdit's processInput function may go recursive, so we want to skip
+        // the instances where it does that by checking the second argument named "level"
+        $level = $event->arguments(1);
+        if($level > 0) return;
+
+        $p = $event->object->getPage();
+
+        unset($this->data['protectedPages'][$p->id]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
+        if($this->input->post->page_protected == 1) {
+            $this->data['protectedPages'][$p->id]['children'] = $this->input->post->children_protected;
+            $this->data['protectedPages'][$p->id]['message_override'] = $this->input->post->message_override;
+            $this->data['protectedPages'][$p->id]['roles'] = $this->input->post->allowed_roles;
+            $this->data['protectedPages'][$p->id]['prohibited_message'] = $this->input->post->prohibited_message;
+        }
+
+        // save to config data with the rest of the settings
+        $this->modules->saveModuleConfigData($this->modules->get("PageProtector"), $this->data);
+
+    }
+
+
+    /**
+     * Return an InputfieldsWrapper of Inputfields used to configure the class
+     *
+     * @param array $data Array of config values indexed by field name
+     * @return InputfieldsWrapper
+     *
+     */
+    public static function getModuleConfigInputfields(array $data) {
+
+        $data = array_merge(self::getDefaultData(), $data);
+
+        if($data['protectSite'] && (!isset($data['protectedPages'][1]) || $data['protectedPages'][1]['children'] == null)) {
+            unset($data['protectedPages'][1]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
+            $data['protectedPages'][1]['children'] = 1;
+            $data['protectedPages'][1]['message_override'] = $data['message'];
+            $data['protectedPages'][1]['roles'] = null;
+            if($data['login_template'] != '') $data['protectedPages'][1]['prohibited_message'] = $data['prohibited_message'];
+        }
+
+        unset($data['protectSite']);
+
+        // save to config data with the rest of the settings
+        wire('modules')->saveModuleConfigData(wire('modules')->get("PageProtector"), $data);
+
+
+
+        $wrapper = new InputFieldWrapper();
+
+        $f = wire('modules')->get("InputfieldMarkup");
+        $f->attr('name', 'instructions');
+        $f->label = __('Instructions');
+        $f->value = "";
+        if(wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<h3 style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</h3>";
+        $f->value .= "
+        <p>Go to the settings tab of a page and adjust the \"Protect this Page\" settings. To protect the entire site, go to the homepage and also check \"Protect Children\", or use the \"Protect Entire Site\" shortcut below.</p>
+        <p>You can also limit logged in access to certain roles by choosing those roles when editing the \"Protect this Page\" settings.</p>
+        <p>To give your site editors the ability to protect pages, you need to give them the \"page-edit-protected\" permission.</p>
+        <p>If you want non-admin visitors to view protected pages you should create a new generic user with only the guest role and provide them with those login details.</p>
+        ";
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldMarkup");
+        $f->attr('name', 'table');
+        $f->label = __('Protected Pages');
+        $value = '';
+        if(empty($data['protectedPages'])) {
+            $value .= "<h3 style='color:#990000'>Currently no pages are protected.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
+        }
+        else{
+            $value .= "<h3 style='color:#009900'>Currently there " . (count($data['protectedPages']) >1 ? " are " : " is ") . count($data['protectedPages'])." protected parent page" . (count($data['protectedPages']) >1 ? "s" : "") . "</h3>";
+        }
+
+        $table = wire('modules')->get("MarkupAdminDataTable");
+        $table->setEncodeEntities(false);
+        $table->setSortable(false);
+        $table->setClass('pageprotector');
+        $table->headerRow(array(
+            __('Title'),
+            __('Path'),
+            __('Children'),
+            __('Allowed Roles'),
+            __('Edit'),
+            __('View')
+        ));
+
+        foreach($data['protectedPages'] as $id => $details) {
+            $row = array(
+                wire('pages')->get($id)->title,
+                wire('pages')->get($id)->path,
+                ($details['children'] == 1 ? 'Yes' : 'No'),
+                (!empty($details['roles']) ? implode(", ", $details['roles']) : 'ALL'),
+                '<a href="'.wire('config')->urls->admin.'page/edit/?id='.$id.'#ProcessPageEditSettings">edit</a>',
+                '<a href="'.wire('pages')->get($id)->url.'">view</a>'
+            );
+            $table->row($row);
+        }
+        $value .= $table->render();
+
+        $f->attr('value', $value);
+        $wrapper->add($f);
+
+
+        if(!isset($data['protectedPages'][1]) || !isset($data['protectedPages'][1]['children'])) {
+            $f = wire('modules')->get("InputfieldCheckbox");
+            $f->attr('name', 'protectSite');
+            $f->label = __('Protect Entire Site');
+            $f->description = __("This is a shortcut to protect the entire website - it will automatically protect the homepage and its children with no role restrictions.");
+            $f->attr('checked', isset($data['protectSite']) && $data['protectSite'] ? 'checked' : '' );
+            $wrapper->add($f);
+        }
+        else{
+            $f = wire('modules')->get("InputfieldHidden");
+            $f->attr('name', 'protectSite');
+            $f->value = 0;
+            $wrapper->add($f);
+        }
+
+
+        $f = wire('modules')->get("InputfieldTextarea");
+        $f->attr('name', 'message');
+        $f->label = __('Message');
+        $f->description = __('This message will be displayed to users when they try to view a protected page.');
+        $f->value = $data['message'];
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldTextarea");
+        $f->attr('name', 'logincss');
+        $f->label = __('CSS');
+        $f->description = __("You can change the style of the login form here.");
+        $f->notes = __("These styles only work with the standard approach. If you choose a Login Template, then you need to add the styling for the form to that template file.");
+        $f->value = $data['logincss'];
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldSelect");
+        $f->name = 'login_template';
+        $f->label = 'Login Template';
+        $f->description = __('This is optional! It allows you to embed the login form within your site, rather than showing the login form on its own on a blank page. The login form will be inserted into the selected template. You must output the contents of the variable, $loginForm somewhere in the template, like:'."\n\n".'include("./head.inc");'."\n".'echo $loginForm;'."\n".'include("./foot.inc");');
+        $f->notes = __("This template does not need to be defined in PW - just the template file is sufficient.\nIt must have a .php or .inc extension.");
+        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item){
+            if (!$item->isDir() && (pathinfo($item, PATHINFO_EXTENSION) == 'php' || pathinfo($item, PATHINFO_EXTENSION) == 'inc')) {
+                $f->addOption($iterator->getSubPathName(), $iterator->getSubPathName());
+            }
+        }
+        $f->value = $data['login_template'];
+        $wrapper->add($f);
+
+        return $wrapper;
+    }
+
+
+    /**
+     * Called only when your module is installed
+     *
+     * Create a new permission.
+     *
+     */
+    public function ___install() {
+        $permission = $this->permissions->get('page-edit-protected');
+        if (!$permission->id) {
+            $p = new Permission();
+            $p->name = 'page-edit-protected';
+            $p->title = $this->_('Access to set the protected status of pages (Page Protector Module)');
+            $p->save();
+            // tell the user we created this module's permission
+            $this->message($this->_("Created New Permission: page-edit-protected"));
+            $this->message($this->_("Assigned page-edit-protected permission to superuser"));
+        }
+
+        $su = $this->roles->get("superuser");
+        $su->addPermission("page-edit-protected");
+        $su->save();
+    }
+
+    /**
+     * Called only when your module is uninstalled
+     *
+     * Remove the special permission
+     *
+     */
+    public function ___uninstall() {
+        $permission = $this->permissions->get('page-edit-protected');
+        if ($permission->id) {
+            $permission->delete();
+            $this->message($this->_("Deleted Permission: page-edit-protected"));
+        }
+    }
+
+
+}

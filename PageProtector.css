@@ -1,0 +1,21 @@
+table.AdminDataList.pageprotector td:first-child, table.AdminDataList.pageprotector th:first-child {
+    width: 25% !important;
+}
+
+table.AdminDataList.pageprotector td:nth-child(2), table.AdminDataList.pageprotector th:nth-child(2) {
+    width: 35% !important;
+}
+
+table.AdminDataList.pageprotector td:nth-child(3), table.AdminDataList .pageprotector th:nth-child(3) {
+    width: 5% !important;
+}
+
+table.AdminDataList.pageprotector td:nth-child(4), table.AdminDataList.pageprotector th:nth-child(4) {
+    width: 25% !important;
+}
+
+table.AdminDataList.pageprotector td:nth-child(n+5), table.AdminDataList.pageprotector th:nth-child(n+5) {
+    width: 5% !important;
+}
+
+
