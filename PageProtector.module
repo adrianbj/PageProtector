@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 1,
+			'version' => 2,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -271,7 +271,7 @@ input[type='password'] {
         $f->attr('name', 'children_protected');
         $f->label = __('Protect children');
         $f->showIf = "page_protected=1";
-        $f->description = __('If checked, viewing of all children of this page will also be protected.');
+        $f->description = __('If checked, viewing of all children (and grandchildren etc) of this page will also be protected.');
         $f->attr('checked', isset($this->data['protectedPages'][$p->id]['children']) && $this->data['protectedPages'][$p->id]['children'] == 1 ? 'checked' : '' );
         $fieldset->append($f);
 
