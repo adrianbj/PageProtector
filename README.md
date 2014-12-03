@@ -14,6 +14,23 @@ Processwire module to allow site editors to protect pages from guest access.
 * Table in the module config settings that lists the details all of the protected pages
 * Shortcut to protect entire site with one click
 
+###API method
+You can make changes to the protection settings of a page via the API
+
+```
+// all optional, except "page_protected", which must be set to true/false
+// if setting it to false, the other options are not relevant
+
+$options = array(
+    "page_protected" => true,
+    "children_protected" => true,
+    "allowed_roles" => array("role1", "role2"),
+    "message_override" => "My custom login message",
+    "prohibited_message" => "My custom prohibited access message"
+);
+
+$page->protect($options);
+```
 
 ## License
 
