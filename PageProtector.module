@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 3,
+			'version' => 4,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -39,6 +39,15 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
      *
      */
     protected $data = array();
+
+    protected $protectOptions = array(
+        "pid" => '',
+        "page_protected" => false,
+        "children_protected" => false,
+        "message_override" => "This page is protected. You must log in to view it.",
+        "allowed_roles" => null,
+        "prohibited_message" => "You do not have permission to view this page."
+    );
 
 
    /**
@@ -125,6 +134,8 @@ input[type='password'] {
 	public function init() {
 
         $this->config->styles->add($this->config->urls->PageProtector . "PageProtector.css");
+
+        $this->addHook('Page::protect', $this, 'protectPages');
 
         if($this->user->hasPermission("page-edit-protected")) {
             $this->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
@@ -311,6 +322,15 @@ input[type='password'] {
 
     }
 
+    public function protectPages(HookEvent $event) {
+        $page = $event->object;
+        $options = $event->arguments(0);
+
+        $options = array_merge($this->protectOptions, $options);
+        $options['pid'] = $page->id;
+
+        $this->saveSettings($options);
+    }
 
 
     public function processPageProtectForm(HookEvent $event){
@@ -322,19 +342,33 @@ input[type='password'] {
 
         $p = $event->object->getPage();
 
-        unset($this->data['protectedPages'][$p->id]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
-        if($this->input->post->page_protected == 1) {
-            $this->data['protectedPages'][$p->id]['children'] = $this->input->post->children_protected;
-            $this->data['protectedPages'][$p->id]['message_override'] = $this->input->post->message_override;
-            $this->data['protectedPages'][$p->id]['roles'] = $this->input->post->allowed_roles;
-            $this->data['protectedPages'][$p->id]['prohibited_message'] = $this->input->post->prohibited_message;
+        $options = array(
+            "pid" => $p->id,
+            "page_protected" => $this->input->post->page_protected,
+            "children_protected" => $this->input->post->children_protected,
+            "message_override" => $this->input->post->message_override,
+            "allowed_roles" => $this->input->post->allowed_roles,
+            "prohibited_message" => $this->input->post->prohibited_message
+        );
+
+        $options = array_merge($this->protectOptions, $options);
+
+        $this->saveSettings($options);
+    }
+
+    public function saveSettings($options) {
+        $pid = $options['pid'];
+        unset($this->data['protectedPages'][$pid]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
+        if((int) $options['page_protected'] == 1) {
+            $this->data['protectedPages'][$pid]['children'] = (int) $options['children_protected'];
+            $this->data['protectedPages'][$pid]['message_override'] = $options['message_override'];
+            $this->data['protectedPages'][$pid]['roles'] = $options['allowed_roles'];
+            $this->data['protectedPages'][$pid]['prohibited_message'] = $options['prohibited_message'];
         }
 
         // save to config data with the rest of the settings
         $this->modules->saveModuleConfigData($this->modules->get("PageProtector"), $this->data);
-
     }
-
 
     /**
      * Return an InputfieldsWrapper of Inputfields used to configure the class
