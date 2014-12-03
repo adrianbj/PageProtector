@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 4,
+			'version' => 5,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -44,7 +44,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
         "pid" => '',
         "page_protected" => false,
         "children_protected" => false,
-        "message_override" => "This page is protected. You must log in to view it.",
+        "message_override" => "",
         "allowed_roles" => null,
         "prohibited_message" => "You do not have permission to view this page."
     );
@@ -328,6 +328,7 @@ input[type='password'] {
 
         $options = array_merge($this->protectOptions, $options);
         $options['pid'] = $page->id;
+        if($options['message_override'] == '') $options['message_override'] = $this->data['message'];
 
         $this->saveSettings($options);
     }
