@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 7,
+			'version' => 8,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -57,6 +57,8 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
     static public function getDefaultData() {
             return array(
                 "protectSite" => 0,
+                "protectHidden" => 0,
+                "protectChildrenOfHidden" => 0,
                 "protectedPages" => array(),
                 "message" => "This page is protected. You must log in to view it.",
                 "prohibited_message" => "You do not have permission to view this page.",
@@ -142,7 +144,7 @@ input[type='password'] {
             $this->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
         }
 
-        if(empty($this->data['protectedPages'])) return; // no pages protected so can escape now
+        if(empty($this->data['protectedPages']) && !$this->data['protectHidden']) return; // no pages protected so can escape now
 
         // if we get this far then add hook on page render to see if the page should be protected
         $this->addHookAfter('Page::render', $this, 'protectedCheck');
@@ -156,11 +158,12 @@ input[type='password'] {
         $p = wire('page')->template->name == 'admin' ? wire('pages')->get((int) $this->input->get->id) : wire('page');
         $pagesToCheck[] = $p->id; // include current page
         foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
-        foreach($pagesToCheck as $ptc){
-            if(array_key_exists($ptc, $this->data['protectedPages'])) {
+        foreach($pagesToCheck as $ptcid){
+            $ptc = $this->pages->get($ptcid);
+            if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden))) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
-                if($p->id == $ptc || ($p->id != $ptc && $this->data['protectedPages'][$ptc]['children'] == 1)){
-                    $matchedParent = $ptc;
+                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && $this->data['protectedPages'][$ptc->id]['children'] == 1) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden))){
+                    $matchedParent = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
             }
@@ -182,7 +185,7 @@ input[type='password'] {
         $matchedParent = $this->isProtected();
 
         if($this->user->isLoggedin()){
-            if($this->data['protectedPages'][$matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$matchedParent]['roles']))) {
+            if(isset($this->data['protectedPages'][$matchedParent]) && $this->data['protectedPages'][$matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$matchedParent]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
                     $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message'])));
@@ -260,7 +263,7 @@ input[type='password'] {
         $fieldset->label = __("Protect this page");
         $fieldset->collapsed = Inputfield::collapsedBlank;
 
-        if($this->isProtected() != "") {
+        if($this->isProtected() != "" && $p->id != $this->isProtected()) {
             $f = wire('modules')->get("InputfieldMarkup");
             $f->attr('name', 'already_protected');
             $f->label = __('Already Protected');
@@ -417,7 +420,7 @@ input[type='password'] {
         $f->label = __('Protected Pages');
         $value = '';
         if(empty($data['protectedPages'])) {
-            $value .= "<h3 style='color:#990000'>Currently no pages are protected.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
+            $value .= "<h3 style='color:#990000'>Currently no individual pages are protected. This does not include Hidden pages protected by the option below.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
         }
         else{
             $value .= "<h3 style='color:#009900'>Currently there " . (count($data['protectedPages']) >1 ? " are " : " is ") . count($data['protectedPages'])." protected parent page" . (count($data['protectedPages']) >1 ? "s" : "") . "</h3>";
@@ -468,6 +471,22 @@ input[type='password'] {
             $wrapper->add($f);
         }
 
+        $f = wire('modules')->get("InputfieldCheckbox");
+        $f->attr('name', 'protectHidden');
+        $f->label = __('Protect Hidden Pages');
+        $f->description = __("If checked, all pages with a hidden status will be protected.");
+        $f->columnWidth = 50;
+        $f->attr('checked', isset($data['protectHidden']) && $data['protectHidden'] ? 'checked' : '' );
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldCheckbox");
+        $f->attr('name', 'protectChildrenOfHidden');
+        $f->showIf="protectHidden=1";
+        $f->label = __('Protect Children of Hidden Pages');
+        $f->description = __("If checked, all children of a page with a hidden status will be protected.");
+        $f->columnWidth = 50;
+        $f->attr('checked', isset($data['protectChildrenOfHidden']) && $data['protectChildrenOfHidden'] ? 'checked' : '' );
+        $wrapper->add($f);
 
         $f = wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'message');

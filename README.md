@@ -8,6 +8,7 @@ Processwire module to allow site editors to protect pages from guest access.
 * Ability for your site editors to control the user access to pages directly from Settings tab of each page
 * Include whether to protect all children of this page or not
 * Optionally allow access to only specified roles
+* Option to protect all hidden pages (and optionally their children)
 * Ability to change the message on the login page to make it specific to this page
 * Option to have login form and prohibited message injected into a custom template
 * Access to the "Protect this Page" settings panel is controlled by the "page-edit-protected" permission
