@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 8,
+			'version' => 9,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -160,9 +160,9 @@ input[type='password'] {
         foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
         foreach($pagesToCheck as $ptcid){
             $ptc = $this->pages->get($ptcid);
-            if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden))) {
+            if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != 27)) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
-                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && $this->data['protectedPages'][$ptc->id]['children'] == 1) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden))){
+                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && $this->data['protectedPages'][$ptc->id]['children'] == 1) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != 27)){
                     $matchedParent = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
