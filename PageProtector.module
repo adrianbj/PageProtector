@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 11,
+			'version' => 12,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -451,7 +451,7 @@ input[type='password'] {
         $f->label = __('Protected Pages');
         $value = '';
         if(empty($data['protectedPages'])) {
-            $value .= "<h3 style='color:#990000'>Currently no individual pages are protected. This does not include Hidden pages protected by the option below.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
+            $value .= "<h3 style='color:#990000'>Currently no individual pages are protected. This does not include Hidden and Unpublished pages protected by the options below.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
         }
         else{
             $value .= "<h3 style='color:#009900'>Currently there " . (count($data['protectedPages']) >1 ? " are " : " is ") . count($data['protectedPages'])." protected parent page" . (count($data['protectedPages']) >1 ? "s" : "") . "</h3>";
