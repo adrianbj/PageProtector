@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 10,
+			'version' => 11,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -59,6 +59,8 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
                 "protectSite" => 0,
                 "protectHidden" => 0,
                 "protectChildrenOfHidden" => 0,
+                "protectUnpublished" => 0,
+                "protectChildrenOfUnpublished" => 0,
                 "protectedPages" => array(),
                 "message" => "This page is protected. You must log in to view it.",
                 "prohibited_message" => "You do not have permission to view this page.",
@@ -144,12 +146,41 @@ input[type='password'] {
             $this->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
         }
 
-        if(empty($this->data['protectedPages']) && !$this->data['protectHidden']) return; // no pages protected so can escape now
+        if(empty($this->data['protectedPages']) && !$this->data['protectUnpublished'] && !$this->data['protectHidden']) return; // no pages protected so can escape now
+
+        // for unpublished pages need to hook before they get 404'd
+        $this->addHookBefore('Page::viewable', $this, 'hookPageViewable');
 
         // if we get this far then add hook on page render to see if the page should be protected
         $this->addHookAfter('Page::render', $this, 'protectedCheck');
-
 	}
+
+
+    public function hookPageViewable(HookEvent $event) {
+
+        if(!$this->data['protectUnpublished']) return;
+
+        // don't want this check in the admin, only on front-end
+        if($this->user->isLoggedin()) return;
+
+        $p = $event->object;
+
+        $parentUnpublished = false;
+        if($this->data['protectChildrenOfUnpublished']) {
+            foreach($p->parents as $parent) {
+                if($parent->hasStatus(Page::statusUnpublished)) {
+                    $parentUnpublished = true;
+                    break;
+                }
+            }
+        }
+
+        if($p->hasStatus(Page::statusUnpublished) || $parentUnpublished) {
+            $p->removeStatus(Page::statusUnpublished);
+            $this->data['protectedPages'][$p->id]['roles'] = null;
+            $this->data['protectedPages'][$p->id]['prohibited_message'] = $this->options['prohibited_message'];
+        }
+    }
 
 
     public function isProtected() {
@@ -162,7 +193,7 @@ input[type='password'] {
             $ptc = $this->pages->get($ptcid);
             if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
-                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && $this->data['protectedPages'][$ptc->id]['children'] == 1) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)){
+                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)){
                     $matchedParent = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
@@ -191,7 +222,7 @@ input[type='password'] {
                     $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message'])));
                 }
                 else {
-                    // no template form provided so hijack page output and display plain text message
+                    // no template form provided so hijack page output and display basic html login form
                     $event->return = "
                     <!DOCTYPE html>
                         <head>
@@ -470,6 +501,24 @@ input[type='password'] {
             $f->value = 0;
             $wrapper->add($f);
         }
+
+        $f = wire('modules')->get("InputfieldCheckbox");
+        $f->attr('name', 'protectUnpublished');
+        $f->label = __('Protect Unpublished Pages');
+        $f->description = __("If checked, all pages with an unpublished status will be protected.");
+        $f->note = __("Without this, unpublished pages would return a 404. This instead provides the login so that authorized users can then view the pages.");
+        $f->columnWidth = 50;
+        $f->attr('checked', isset($data['protectUnpublished']) && $data['protectUnpublished'] ? 'checked' : '' );
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldCheckbox");
+        $f->attr('name', 'protectChildrenOfUnpublished');
+        $f->showIf="protectUnpublished=1";
+        $f->label = __('Protect Children of Unpublished Pages');
+        $f->description = __("If checked, all children of a page with an unpublished status will be protected.");
+        $f->columnWidth = 50;
+        $f->attr('checked', isset($data['protectChildrenOfUnpublished']) && $data['protectChildrenOfUnpublished'] ? 'checked' : '' );
+        $wrapper->add($f);
 
         $f = wire('modules')->get("InputfieldCheckbox");
         $f->attr('name', 'protectHidden');
