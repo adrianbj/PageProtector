@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 12,
+			'version' => 13,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -160,10 +160,10 @@ input[type='password'] {
 
         if(!$this->data['protectUnpublished']) return;
 
-        // don't want this check in the admin, only on front-end
-        if($this->user->isLoggedin()) return;
-
         $p = $event->object;
+
+        // don't want this check in the admin, only on front-end
+        if(wire('process') != 'ProcessPageView') return;
 
         $parentUnpublished = false;
         if($this->data['protectChildrenOfUnpublished']) {
