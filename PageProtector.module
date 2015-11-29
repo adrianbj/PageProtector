@@ -25,7 +25,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 13,
+			'version' => 14,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -431,7 +431,7 @@ input[type='password'] {
 
 
 
-        $wrapper = new InputFieldWrapper();
+        $wrapper = new InputfieldWrapper();
 
         $f = wire('modules')->get("InputfieldMarkup");
         $f->attr('name', 'instructions');
