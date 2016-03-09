@@ -24,6 +24,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 		return array(
 			'title' => 'Page Protector',
 			'summary' => 'Allows site editors to protect pages from guest access.',
+            'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
 			'version' => 14,
 			'permanent' => false,

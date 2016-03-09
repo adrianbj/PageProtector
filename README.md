@@ -33,6 +33,9 @@ $options = array(
 $page->protect($options);
 ```
 
+####Support forum:
+https://processwire.com/talk/topic/8387-page-protector/
+
 ## License
 
 This program is free software; you can redistribute it and/or
