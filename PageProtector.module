@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 14,
+			'version' => 15,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -349,7 +349,7 @@ input[type='password'] {
         $f->label = __('Prohibited Message');
         $f->showIf = "page_protected=1";
         $f->description = __('This message will be displayed to logged in users when they try to view a page that their role doesn\'t have permission to view.');
-        $f->value = isset($this->data['protectedPages'][$p->id]['prohibited_message']) &&  $this->data['protectedPages'][$p->id]['prohibited_message'] != '' ? $this->data['protectedPages'][$p->id]['prohibited_message'] : 'You do not have permission to view this page.';
+        $f->value = isset($this->data['protectedPages'][$p->id]['prohibited_message']) &&  $this->data['protectedPages'][$p->id]['prohibited_message'] != '' ? $this->data['protectedPages'][$p->id]['prohibited_message'] : $this->data['prohibited_message'];
         $fieldset->add($f);
 
 
@@ -440,7 +440,11 @@ input[type='password'] {
         $f->value = "";
         if(wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<h3 style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</h3>";
         $f->value .= "
-        <p>Go to the settings tab of a page and adjust the \"Protect this Page\" settings. To protect the entire site, go to the homepage and also check \"Protect Children\", or use the \"Protect Entire Site\" shortcut below.</p>
+        <p>Go to the settings tab of a page and adjust the \"Protect this Page\" settings.";
+        if(!isset($data['protectedPages'][1]) || !isset($data['protectedPages'][1]['children'])) {
+            $f->value .= "To protect the entire site, go to the homepage and also check \"Protect Children\", or use the \"Protect Entire Site\" shortcut below.";
+        }
+        $f->value .= "</p>
         <p>You can also limit logged in access to certain roles by choosing those roles when editing the \"Protect this Page\" settings.</p>
         <p>To give your site editors the ability to protect pages, you need to give them the \"page-edit-protected\" permission.</p>
         <p>If you want non-admin visitors to view protected pages you should create a new generic user with only the guest role and provide them with those login details.</p>
@@ -543,6 +547,14 @@ input[type='password'] {
         $f->label = __('Message');
         $f->description = __('This message will be displayed to users when they try to view a protected page.');
         $f->value = $data['message'];
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldTextarea");
+        $f->attr('name', 'prohibited_message');
+        $f->label = __('Default Prohibited Message');
+        $f->description = __('This is the default prohibited message if you protect a page from viewing by certain user roles.');
+        $f->notes = __('Prohibiting page access by user role can only be done from the Settings tab of a page. This config setting is just a convenience for setting a default for your site.');
+        $f->value = $data['prohibited_message'];
         $wrapper->add($f);
 
         $f = wire('modules')->get("InputfieldTextarea");
