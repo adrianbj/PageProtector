@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 15,
+			'version' => 16,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -245,22 +245,24 @@ input[type='password'] {
         }
         elseif($this->input->post->username && $this->input->post->pass) {
             $username = $this->sanitizer->username($this->input->post->username);
-            $this->session->login($username, $this->input->post->pass);
-            $this->session->redirect($this->page->url);
+            $user = $this->session->login($username, $this->input->post->pass);
+            if(!$user) $this->session->loginFailed = true;
+            $this->session->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
         }
         else{
-
             $loginForm = "
                 <style>
                     {$this->data['logincss']}
                 </style>
-                <form class='PageProtectorForm' action='./' method='post'>
-                        <legend>" . (isset($this->data['protectedPages'][$matchedParent]['message_override']) ? nl2br($this->data['protectedPages'][$matchedParent]['message_override']) : nl2br($this->data['message'])) . "</legend>
+                <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
+                        <legend>" . ($this->session->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . (isset($this->data['protectedPages'][$matchedParent]['message_override']) ? nl2br($this->data['protectedPages'][$matchedParent]['message_override']) : nl2br($this->data['message'])) . "</legend>
                         <input type='text' name='username' placeholder='Username'>
                         <input type='password' name='pass' placeholder='Password'>
                         <p><button type='submit' name='login'>Login</button></p>
                 </form>
             ";
+
+            if($this->session->loginFailed) $this->session->loginFailed = false;
 
             if($this->data['login_template'] == ''){
                 $event->return = "
