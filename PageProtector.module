@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 16,
+			'version' => 17,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -40,6 +40,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
      *
      */
     protected $data = array();
+    protected $matchedParent = "";
 
     protected $protectOptions = array(
         "pid" => '',
@@ -66,6 +67,9 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
                 "message" => "This page is protected. You must log in to view it.",
                 "prohibited_message" => "You do not have permission to view this page.",
                 "login_template" => "",
+                "usernamePlaceholder" => "Username",
+                "passwordPlaceholder" => "Password",
+                "loginButtonText" => "Login",
                 "logincss" => "
 .page-protector-container {
     width: 400px;
@@ -186,7 +190,6 @@ input[type='password'] {
 
     public function isProtected() {
         $pagesToCheck = array();
-        $matchedParent = "";
         $p = wire('page')->template->name == 'admin' ? wire('pages')->get((int) $this->input->get->id) : wire('page');
         $pagesToCheck[] = $p->id; // include current page
         foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
@@ -195,12 +198,12 @@ input[type='password'] {
             if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
                 if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)){
-                    $matchedParent = $ptc->id;
+                    $this->matchedParent = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
             }
         }
-        return $matchedParent;
+        return $this->matchedParent;
     }
 
 
@@ -214,13 +217,19 @@ input[type='password'] {
         if($this->page->template == 'admin') return; // ignore admin pages including admin login page
         if($this->isProtected() == "") return; // if no matches, then escape now
 
-        $matchedParent = $this->isProtected();
+        if($this->wire('languages')) {
+            $userLanguage = $this->wire('user')->language;
+            $lang = $userLanguage->isDefault() ? '' : "__$userLanguage->id";
+        }
+        else {
+            $lang = '';
+        }
 
         if($this->user->isLoggedin()){
-            if(isset($this->data['protectedPages'][$matchedParent]) && $this->data['protectedPages'][$matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$matchedParent]['roles']))) {
+            if(isset($this->data['protectedPages'][$this->matchedParent]) && $this->data['protectedPages'][$this->matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$this->matchedParent]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
-                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message'])));
+                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getText('prohibited_message', $lang))));
                 }
                 else {
                     // no template form provided so hijack page output and display basic html login form
@@ -235,7 +244,7 @@ input[type='password'] {
                         <body>
                             <div class='page-protector-container'>
                             <p>" .
-                                nl2br($this->data['protectedPages'][$matchedParent]['prohibited_message']) .
+                                nl2br($this->getText('prohibited_message', $lang)) .
                             "</p>
                             </div>
                         </body>
@@ -255,10 +264,10 @@ input[type='password'] {
                     {$this->data['logincss']}
                 </style>
                 <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
-                        <legend>" . ($this->session->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . (isset($this->data['protectedPages'][$matchedParent]['message_override']) ? nl2br($this->data['protectedPages'][$matchedParent]['message_override']) : nl2br($this->data['message'])) . "</legend>
-                        <input type='text' name='username' placeholder='Username'>
-                        <input type='password' name='pass' placeholder='Password'>
-                        <p><button type='submit' name='login'>Login</button></p>
+                        <legend>" . ($this->session->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText('message', $lang)) . "</legend>
+                        <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."'>
+                        <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."'>
+                        <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
                 </form>
             ";
 
@@ -326,9 +335,17 @@ input[type='password'] {
         $f = wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'message_override');
         $f->label = __('Message');
+        $f->useLanguages = true;
         $f->showIf = "page_protected=1";
         $f->description = __('This message will be displayed to users when they try to view the site.');
         $f->notes = __('This page specific message overrides the default one in the module config settings.');
+        if($this->wire('languages')) {
+            foreach(wire('languages') as $lang) {
+                if($lang->isDefault()) continue;
+                $value = isset($this->data['protectedPages'][$p->id]['message_override__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['message_override__' . $lang->id] : $this->data['message__' . $lang->id];
+                $f->set("value$lang->id", $value);
+            }
+        }
         $f->value = isset($this->data['protectedPages'][$p->id]['message_override']) ? $this->data['protectedPages'][$p->id]['message_override'] : $this->data['message'];
         $fieldset->add($f);
 
@@ -349,9 +366,17 @@ input[type='password'] {
         $f = wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'prohibited_message');
         $f->label = __('Prohibited Message');
+        $f->useLanguages = true;
         $f->showIf = "page_protected=1";
         $f->description = __('This message will be displayed to logged in users when they try to view a page that their role doesn\'t have permission to view.');
-        $f->value = isset($this->data['protectedPages'][$p->id]['prohibited_message']) &&  $this->data['protectedPages'][$p->id]['prohibited_message'] != '' ? $this->data['protectedPages'][$p->id]['prohibited_message'] : $this->data['prohibited_message'];
+        if($this->wire('languages')) {
+            foreach(wire('languages') as $lang) {
+                if($lang->isDefault()) continue;
+                $value = isset($this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id] : $this->data['prohibited_message__' . $lang->id];
+                $f->set("value$lang->id", $value);
+            }
+        }
+        $f->value = isset($this->data['protectedPages'][$p->id]['prohibited_message']) ? $this->data['protectedPages'][$p->id]['prohibited_message'] : $this->data['prohibited_message'];
         $fieldset->add($f);
 
 
@@ -384,14 +409,47 @@ input[type='password'] {
             "pid" => $p->id,
             "page_protected" => $this->input->post->page_protected,
             "children_protected" => $this->input->post->children_protected,
-            "message_override" => $this->input->post->message_override,
             "allowed_roles" => $this->input->post->allowed_roles,
+            "message_override" => $this->input->post->message_override,
             "prohibited_message" => $this->input->post->prohibited_message
         );
 
+        if($this->wire('languages')) {
+            foreach($this->wire('languages') as $lang) {
+                if(!$lang->isDefault()) {
+                    $textField = 'message_override__'.$lang->id;
+                    $options['message_override__'.$lang->id] = $this->input->post->$textField;
+                    $textField = 'prohibited_message__'.$lang->id;
+                    $options['prohibited_message__'.$lang->id] = $this->input->post->$textField;
+                }
+            }
+        }
         $options = array_merge($this->protectOptions, $options);
 
         $this->saveSettings($options);
+    }
+
+    public function getText($textField, $lang) {
+
+        $text = '';
+        $override = $textField == 'message' ? '_override' : '';
+
+        if($lang == '') {
+            $text = isset($this->data['protectedPages'][$this->matchedParent][$textField.$override]) ? $this->data['protectedPages'][$this->matchedParent][$textField.$override] : $this->data[$textField];
+        }
+        else {
+            if(isset($this->data['protectedPages'][$this->matchedParent][$textField.$override.$lang])) {
+                $text = $this->data['protectedPages'][$this->matchedParent][$textField.$override.$lang];
+            }
+            if(!$text) {
+                $text = isset($this->data[$textField.$lang]) ? $this->data[$textField.$lang] : $this->data['protectedPages'][$this->matchedParent][$textField.$override];
+            }
+            if(!$text) {
+                $text = $this->data[$textField];
+            }
+        }
+
+        return $text;
     }
 
     public function saveSettings($options) {
@@ -399,8 +457,17 @@ input[type='password'] {
         unset($this->data['protectedPages'][$pid]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
         if((int) $options['page_protected'] == 1) {
             $this->data['protectedPages'][$pid]['children'] = (int) $options['children_protected'];
-            $this->data['protectedPages'][$pid]['message_override'] = $options['message_override'];
             $this->data['protectedPages'][$pid]['roles'] = $options['allowed_roles'];
+
+            if($this->wire('languages')) {
+                foreach($this->wire('languages') as $lang) {
+                    if(!$lang->isDefault()) {
+                        $this->data['protectedPages'][$pid]['message_override__'.$lang->id] = $options['message_override__'.$lang->id];
+                        $this->data['protectedPages'][$pid]['prohibited_message__'.$lang->id] = $options['prohibited_message__'.$lang->id];
+                    }
+                }
+            }
+            $this->data['protectedPages'][$pid]['message_override'] = $options['message_override'];
             $this->data['protectedPages'][$pid]['prohibited_message'] = $options['prohibited_message'];
         }
 
@@ -547,13 +614,42 @@ input[type='password'] {
         $f = wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'message');
         $f->label = __('Message');
+        $f->useLanguages = true;
         $f->description = __('This message will be displayed to users when they try to view a protected page.');
         $f->value = $data['message'];
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldText");
+        $f->attr('name', 'usernamePlaceholder');
+        $f->label = __('Username Placeholder');
+        $f->useLanguages = true;
+        $f->description = __('By default this will be "Username".');
+        $f->value = $data['usernamePlaceholder'];
+        $f->columnWidth = 33;
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldText");
+        $f->attr('name', 'passwordPlaceholder');
+        $f->label = __('Password Placeholder');
+        $f->useLanguages = true;
+        $f->description = __('By default this will be "Password".');
+        $f->value = $data['passwordPlaceholder'];
+        $f->columnWidth = 34;
+        $wrapper->add($f);
+
+        $f = wire('modules')->get("InputfieldText");
+        $f->attr('name', 'loginButtonText');
+        $f->label = __('Login Button Text');
+        $f->useLanguages = true;
+        $f->description = __('By default this will be "Login".');
+        $f->value = $data['loginButtonText'];
+        $f->columnWidth = 33;
         $wrapper->add($f);
 
         $f = wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'prohibited_message');
         $f->label = __('Default Prohibited Message');
+        $f->useLanguages = true;
         $f->description = __('This is the default prohibited message if you protect a page from viewing by certain user roles.');
         $f->notes = __('Prohibiting page access by user role can only be done from the Settings tab of a page. This config setting is just a convenience for setting a default for your site.');
         $f->value = $data['prohibited_message'];
