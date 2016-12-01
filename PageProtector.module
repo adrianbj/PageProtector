@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 17,
+			'version' => 18,
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -404,6 +404,7 @@ input[type='password'] {
         if($level > 0) return;
 
         $p = $event->object->getPage();
+        if($p->matches("has_parent={$this->config->adminRootPageID}|{$this->config->trashPageID}")) return;
 
         $options = array(
             "pid" => $p->id,
