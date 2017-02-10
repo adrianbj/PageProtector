@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => 18,
+			'version' => '0.2.0',
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -142,22 +142,22 @@ input[type='password'] {
 	 */
 	public function init() {
 
-        $this->config->styles->add($this->config->urls->PageProtector . "PageProtector.css");
+        $this->wire('config')->styles->add($this->wire('config')->urls->PageProtector . "PageProtector.css");
 
-        $this->addHook('Page::protect', $this, 'protectPages');
+        $this->wire()->addHook('Page::protect', $this, 'protectPages');
 
-        if($this->user->hasPermission("page-edit-protected")) {
-            $this->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
-            $this->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
+        if($this->wire('user')->hasPermission("page-edit-protected")) {
+            $this->wire()->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
+            $this->wire()->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
         }
 
         if(empty($this->data['protectedPages']) && !$this->data['protectUnpublished'] && !$this->data['protectHidden']) return; // no pages protected so can escape now
 
         // for unpublished pages need to hook before they get 404'd
-        $this->addHookBefore('Page::viewable', $this, 'hookPageViewable');
+        $this->wire()->addHookBefore('Page::viewable', $this, 'hookPageViewable');
 
         // if we get this far then add hook on page render to see if the page should be protected
-        $this->addHookAfter('Page::render', $this, 'protectedCheck');
+        $this->wire()->addHookAfter('Page::render', $this, 'protectedCheck');
 	}
 
 
@@ -168,7 +168,7 @@ input[type='password'] {
         $p = $event->object;
 
         // don't want this check in the admin, only on front-end
-        if(wire('process') != 'ProcessPageView') return;
+        if($this->wire('process') != 'ProcessPageView') return;
 
         $parentUnpublished = false;
         if($this->data['protectChildrenOfUnpublished']) {
@@ -188,16 +188,15 @@ input[type='password'] {
     }
 
 
-    public function isProtected() {
+    public function isProtected($p) {
         $pagesToCheck = array();
-        $p = wire('page')->template->name == 'admin' ? wire('pages')->get((int) $this->input->get->id) : wire('page');
         $pagesToCheck[] = $p->id; // include current page
         foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
         foreach($pagesToCheck as $ptcid){
-            $ptc = $this->pages->get($ptcid);
-            if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)) {
+            $ptc = $this->wire('pages')->get($ptcid);
+            if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->wire('config')->http404PageID)) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
-                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->config->http404PageID)){
+                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->wire('config')->http404PageID)){
                     $this->matchedParent = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
@@ -214,8 +213,10 @@ input[type='password'] {
      */
     public function protectedCheck(HookEvent $event) {
 
-        if($this->page->template == 'admin') return; // ignore admin pages including admin login page
-        if($this->isProtected() == "") return; // if no matches, then escape now
+        $p = $event->object;
+
+        if($p->template == 'admin') return; // ignore admin pages including admin login page
+        if($this->isProtected($p) == "") return; // if no matches, then escape now
 
         if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
@@ -225,8 +226,8 @@ input[type='password'] {
             $lang = '';
         }
 
-        if($this->user->isLoggedin()){
-            if(isset($this->data['protectedPages'][$this->matchedParent]) && $this->data['protectedPages'][$this->matchedParent]['roles'] !== null && !$this->user->roles->has("name=".implode("|",$this->data['protectedPages'][$this->matchedParent]['roles']))) {
+        if($this->wire('user')->isLoggedin()){
+            if(isset($this->data['protectedPages'][$this->matchedParent]) && $this->data['protectedPages'][$this->matchedParent]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$this->matchedParent]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
                     $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getText('prohibited_message', $lang))));
@@ -252,11 +253,11 @@ input[type='password'] {
                 }
             }
         }
-        elseif($this->input->post->username && $this->input->post->pass) {
-            $username = $this->sanitizer->username($this->input->post->username);
-            $user = $this->session->login($username, $this->input->post->pass);
-            if(!$user) $this->session->loginFailed = true;
-            $this->session->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
+        elseif($this->wire('input')->post->username && $this->wire('input')->post->pass) {
+            $username = $this->wire('sanitizer')->username($this->wire('input')->post->username);
+            $user = $this->wire('session')->login($username, $this->wire('input')->post->pass);
+            if(!$user) $this->wire('session')->loginFailed = true;
+            $this->wire('session')->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
         }
         else{
             $loginForm = "
@@ -264,14 +265,14 @@ input[type='password'] {
                     {$this->data['logincss']}
                 </style>
                 <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
-                        <legend>" . ($this->session->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText('message', $lang)) . "</legend>
-                        <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."'>
-                        <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."'>
+                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText('message', $lang)) . "</legend>
+                        <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."' required />
+                        <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."' required />
                         <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
                 </form>
             ";
 
-            if($this->session->loginFailed) $this->session->loginFailed = false;
+            if($this->wire('session')->loginFailed) $this->wire('session')->loginFailed = false;
 
             if($this->data['login_template'] == ''){
                 $event->return = "
@@ -288,6 +289,7 @@ input[type='password'] {
                 ";
             }
             else{
+                $p->loginForm = $loginForm; // added to allow support for latte (https://processwire.com/talk/topic/8387-page-protector/?do=findComment&comment=138638)
                 $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => $loginForm));
             }
         }
@@ -301,30 +303,30 @@ input[type='password'] {
 
         $inputfields = $event->return;
 
-        $fieldset = $this->modules->get("InputfieldFieldset");
+        $fieldset = $this->wire('modules')->get("InputfieldFieldset");
         $fieldset->attr('id', 'protect_fieldset');
         $fieldset->label = __("Protect this page");
         $fieldset->collapsed = Inputfield::collapsedBlank;
 
-        if($this->isProtected() != "" && $p->id != $this->isProtected()) {
-            $f = wire('modules')->get("InputfieldMarkup");
+        if($this->isProtected($p) != "" && $p->id != $this->isProtected($p)) {
+            $f = $this->wire('modules')->get("InputfieldMarkup");
             $f->attr('name', 'already_protected');
             $f->label = __('Already Protected');
             $f->value = "
-            <p>This page is already protected via its parent: " . wire('pages')->get($this->isProtected())->title . "</p>
+            <p>This page is already protected via its parent: " . $this->wire('pages')->get($this->isProtected($p))->title . "</p>
             <p>However, you can still apply more specific protection to certain roles with the settings below.</p>
             ";
             $fieldset->append($f);
         }
 
-        $f = $this->modules->get('InputfieldCheckbox');
+        $f = $this->wire('modules')->get('InputfieldCheckbox');
         $f->label = __('Protect this page');
         $f->description = __('If checked, front-end viewing of this page will be limited to logged in users with one of the selected roles.');
         $f->attr('name', 'page_protected');
         $f->attr('checked', isset($this->data['protectedPages']) && array_key_exists($p->id, $this->data['protectedPages']) ? 'checked' : '' );
         $fieldset->append($f);
 
-        $f = $this->modules->get('InputfieldCheckbox');
+        $f = $this->wire('modules')->get('InputfieldCheckbox');
         $f->attr('name', 'children_protected');
         $f->label = __('Protect children');
         $f->showIf = "page_protected=1";
@@ -332,7 +334,7 @@ input[type='password'] {
         $f->attr('checked', isset($this->data['protectedPages'][$p->id]['children']) && $this->data['protectedPages'][$p->id]['children'] == 1 ? 'checked' : '' );
         $fieldset->append($f);
 
-        $f = wire('modules')->get("InputfieldTextarea");
+        $f = $this->wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'message_override');
         $f->label = __('Message');
         $f->useLanguages = true;
@@ -340,22 +342,22 @@ input[type='password'] {
         $f->description = __('This message will be displayed to users when they try to view the site.');
         $f->notes = __('This page specific message overrides the default one in the module config settings.');
         if($this->wire('languages')) {
-            foreach(wire('languages') as $lang) {
+            foreach($this->wire('languages') as $lang) {
                 if($lang->isDefault()) continue;
-                $value = isset($this->data['protectedPages'][$p->id]['message_override__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['message_override__' . $lang->id] : $this->data['message__' . $lang->id];
+                $value = isset($this->data['protectedPages'][$p->id]['message_override__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['message_override__' . $lang->id] : isset($this->data['message__' . $lang->id]) ? $this->data['message__' . $lang->id] : '';
                 $f->set("value$lang->id", $value);
             }
         }
         $f->value = isset($this->data['protectedPages'][$p->id]['message_override']) ? $this->data['protectedPages'][$p->id]['message_override'] : $this->data['message'];
         $fieldset->add($f);
 
-        $f = $this->modules->get("InputfieldAsmSelect");
+        $f = $this->wire('modules')->get("InputfieldAsmSelect");
         $f->name = 'allowed_roles';
         $f->label = 'Allowed Roles';
         $f->showIf = "page_protected=1";
         $f->description = __("To limit access to specific roles, select them here.\nTo allow all roles, leave none selected.");
         $f->notes = __("NB The users with these roles still need to log in to view the page.\nThis allows you to completely block the unselected roles from viewing the page, even if they are logged in.");
-        foreach($this->roles as $role){
+        foreach($this->wire('roles') as $role){
             $f->addOption($role->name, $role->name);
             if(isset($this->data['protectedPages'][$p->id]['roles']) && in_array($role->name, $this->data['protectedPages'][$p->id]['roles'])) $f->attr('value', $role->name);
         }
@@ -363,16 +365,16 @@ input[type='password'] {
         $fieldset->append($f);
 
 
-        $f = wire('modules')->get("InputfieldTextarea");
+        $f = $this->wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'prohibited_message');
         $f->label = __('Prohibited Message');
         $f->useLanguages = true;
         $f->showIf = "page_protected=1";
         $f->description = __('This message will be displayed to logged in users when they try to view a page that their role doesn\'t have permission to view.');
         if($this->wire('languages')) {
-            foreach(wire('languages') as $lang) {
+            foreach($this->wire('languages') as $lang) {
                 if($lang->isDefault()) continue;
-                $value = isset($this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id] : $this->data['prohibited_message__' . $lang->id];
+                $value = isset($this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id] : isset($this->data['prohibited_message__' . $lang->id]) ? $this->data['prohibited_message__' . $lang->id] : '';
                 $f->set("value$lang->id", $value);
             }
         }
@@ -404,24 +406,24 @@ input[type='password'] {
         if($level > 0) return;
 
         $p = $event->object->getPage();
-        if($p->matches("has_parent={$this->config->adminRootPageID}|{$this->config->trashPageID}")) return;
+        if($p->matches("has_parent={$this->wire('config')->adminRootPageID}|{$this->wire('config')->trashPageID}")) return;
 
         $options = array(
             "pid" => $p->id,
-            "page_protected" => $this->input->post->page_protected,
-            "children_protected" => $this->input->post->children_protected,
-            "allowed_roles" => $this->input->post->allowed_roles,
-            "message_override" => $this->input->post->message_override,
-            "prohibited_message" => $this->input->post->prohibited_message
+            "page_protected" => $this->wire('input')->post->page_protected,
+            "children_protected" => $this->wire('input')->post->children_protected,
+            "allowed_roles" => $this->wire('input')->post->allowed_roles,
+            "message_override" => $this->wire('input')->post->message_override,
+            "prohibited_message" => $this->wire('input')->post->prohibited_message
         );
 
         if($this->wire('languages')) {
             foreach($this->wire('languages') as $lang) {
                 if(!$lang->isDefault()) {
                     $textField = 'message_override__'.$lang->id;
-                    $options['message_override__'.$lang->id] = $this->input->post->$textField;
+                    $options['message_override__'.$lang->id] = $this->wire('input')->post->$textField;
                     $textField = 'prohibited_message__'.$lang->id;
-                    $options['prohibited_message__'.$lang->id] = $this->input->post->$textField;
+                    $options['prohibited_message__'.$lang->id] = $this->wire('input')->post->$textField;
                 }
             }
         }
@@ -473,7 +475,7 @@ input[type='password'] {
         }
 
         // save to config data with the rest of the settings
-        $this->modules->saveModuleConfigData($this->modules->get("PageProtector"), $this->data);
+        $this->wire('modules')->saveModuleConfigData($this->wire('modules')->get("PageProtector"), $this->data);
     }
 
     /**
@@ -483,7 +485,7 @@ input[type='password'] {
      * @return InputfieldsWrapper
      *
      */
-    public static function getModuleConfigInputfields(array $data) {
+    public function getModuleConfigInputfields(array $data) {
 
         $data = array_merge(self::getDefaultData(), $data);
 
@@ -498,17 +500,17 @@ input[type='password'] {
         unset($data['protectSite']);
 
         // save to config data with the rest of the settings
-        wire('modules')->saveModuleConfigData(wire('modules')->get("PageProtector"), $data);
+        $this->wire('modules')->saveModuleConfigData($this->wire('modules')->get("PageProtector"), $data);
 
 
 
         $wrapper = new InputfieldWrapper();
 
-        $f = wire('modules')->get("InputfieldMarkup");
+        $f = $this->wire('modules')->get("InputfieldMarkup");
         $f->attr('name', 'instructions');
         $f->label = __('Instructions');
         $f->value = "";
-        if(wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<h3 style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</h3>";
+        if($this->wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<h3 style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</h3>";
         $f->value .= "
         <p>Go to the settings tab of a page and adjust the \"Protect this Page\" settings.";
         if(!isset($data['protectedPages'][1]) || !isset($data['protectedPages'][1]['children'])) {
@@ -521,7 +523,7 @@ input[type='password'] {
         ";
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldMarkup");
+        $f = $this->wire('modules')->get("InputfieldMarkup");
         $f->attr('name', 'table');
         $f->label = __('Protected Pages');
         $value = '';
@@ -532,7 +534,7 @@ input[type='password'] {
             $value .= "<h3 style='color:#009900'>Currently there " . (count($data['protectedPages']) >1 ? " are " : " is ") . count($data['protectedPages'])." protected parent page" . (count($data['protectedPages']) >1 ? "s" : "") . "</h3>";
         }
 
-        $table = wire('modules')->get("MarkupAdminDataTable");
+        $table = $this->wire('modules')->get("MarkupAdminDataTable");
         $table->setEncodeEntities(false);
         $table->setSortable(false);
         $table->setClass('pageprotector');
@@ -547,12 +549,12 @@ input[type='password'] {
 
         foreach($data['protectedPages'] as $id => $details) {
             $row = array(
-                wire('pages')->get($id)->title,
-                wire('pages')->get($id)->path,
+                $this->wire('pages')->get($id)->title,
+                $this->wire('pages')->get($id)->path,
                 ($details['children'] == 1 ? 'Yes' : 'No'),
                 (!empty($details['roles']) ? implode(", ", $details['roles']) : 'ALL'),
-                '<a href="'.wire('config')->urls->admin.'page/edit/?id='.$id.'#ProcessPageEditSettings">edit</a>',
-                '<a href="'.wire('pages')->get($id)->url.'">view</a>'
+                '<a href="'.$this->wire('config')->urls->admin.'page/edit/?id='.$id.'#ProcessPageEditSettings">edit</a>',
+                '<a href="'.$this->wire('pages')->get($id)->url.'">view</a>'
             );
             $table->row($row);
         }
@@ -563,7 +565,7 @@ input[type='password'] {
 
 
         if(!isset($data['protectedPages'][1]) || !isset($data['protectedPages'][1]['children'])) {
-            $f = wire('modules')->get("InputfieldCheckbox");
+            $f = $this->wire('modules')->get("InputfieldCheckbox");
             $f->attr('name', 'protectSite');
             $f->label = __('Protect Entire Site');
             $f->description = __("This is a shortcut to protect the entire website - it will automatically protect the homepage and its children with no role restrictions.");
@@ -571,13 +573,13 @@ input[type='password'] {
             $wrapper->add($f);
         }
         else{
-            $f = wire('modules')->get("InputfieldHidden");
+            $f = $this->wire('modules')->get("InputfieldHidden");
             $f->attr('name', 'protectSite');
             $f->value = 0;
             $wrapper->add($f);
         }
 
-        $f = wire('modules')->get("InputfieldCheckbox");
+        $f = $this->wire('modules')->get("InputfieldCheckbox");
         $f->attr('name', 'protectUnpublished');
         $f->label = __('Protect Unpublished Pages');
         $f->description = __("If checked, all pages with an unpublished status will be protected.");
@@ -586,7 +588,7 @@ input[type='password'] {
         $f->attr('checked', isset($data['protectUnpublished']) && $data['protectUnpublished'] ? 'checked' : '' );
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldCheckbox");
+        $f = $this->wire('modules')->get("InputfieldCheckbox");
         $f->attr('name', 'protectChildrenOfUnpublished');
         $f->showIf="protectUnpublished=1";
         $f->label = __('Protect Children of Unpublished Pages');
@@ -595,7 +597,7 @@ input[type='password'] {
         $f->attr('checked', isset($data['protectChildrenOfUnpublished']) && $data['protectChildrenOfUnpublished'] ? 'checked' : '' );
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldCheckbox");
+        $f = $this->wire('modules')->get("InputfieldCheckbox");
         $f->attr('name', 'protectHidden');
         $f->label = __('Protect Hidden Pages');
         $f->description = __("If checked, all pages with a hidden status will be protected.");
@@ -603,7 +605,7 @@ input[type='password'] {
         $f->attr('checked', isset($data['protectHidden']) && $data['protectHidden'] ? 'checked' : '' );
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldCheckbox");
+        $f = $this->wire('modules')->get("InputfieldCheckbox");
         $f->attr('name', 'protectChildrenOfHidden');
         $f->showIf="protectHidden=1";
         $f->label = __('Protect Children of Hidden Pages');
@@ -612,7 +614,7 @@ input[type='password'] {
         $f->attr('checked', isset($data['protectChildrenOfHidden']) && $data['protectChildrenOfHidden'] ? 'checked' : '' );
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldTextarea");
+        $f = $this->wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'message');
         $f->label = __('Message');
         $f->useLanguages = true;
@@ -620,7 +622,7 @@ input[type='password'] {
         $f->value = $data['message'];
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldText");
+        $f = $this->wire('modules')->get("InputfieldText");
         $f->attr('name', 'usernamePlaceholder');
         $f->label = __('Username Placeholder');
         $f->useLanguages = true;
@@ -629,7 +631,7 @@ input[type='password'] {
         $f->columnWidth = 33;
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldText");
+        $f = $this->wire('modules')->get("InputfieldText");
         $f->attr('name', 'passwordPlaceholder');
         $f->label = __('Password Placeholder');
         $f->useLanguages = true;
@@ -638,7 +640,7 @@ input[type='password'] {
         $f->columnWidth = 34;
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldText");
+        $f = $this->wire('modules')->get("InputfieldText");
         $f->attr('name', 'loginButtonText');
         $f->label = __('Login Button Text');
         $f->useLanguages = true;
@@ -647,7 +649,7 @@ input[type='password'] {
         $f->columnWidth = 33;
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldTextarea");
+        $f = $this->wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'prohibited_message');
         $f->label = __('Default Prohibited Message');
         $f->useLanguages = true;
@@ -656,20 +658,20 @@ input[type='password'] {
         $f->value = $data['prohibited_message'];
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldTextarea");
+        $f = $this->wire('modules')->get("InputfieldTextarea");
         $f->attr('name', 'logincss');
         $f->label = __('CSS');
         $f->description = __("You can change the style of the login form here.");
         $f->value = $data['logincss'];
         $wrapper->add($f);
 
-        $f = wire('modules')->get("InputfieldSelect");
+        $f = $this->wire('modules')->get("InputfieldSelect");
         $f->name = 'login_template';
         $f->label = 'Login Template';
         $f->description = __('This is optional! It allows you to embed the login form within your site, rather than showing the login form on its own on a blank page. The login form will be inserted into the selected template. You must output the contents of the variable, $loginForm somewhere in the template, like:'."\n\n".'include("./head.inc");'."\n".'echo $loginForm;'."\n".'include("./foot.inc");');
-        $f->notes = __("This template does not need to be defined in PW - just the template file is sufficient.\nIt must have a .php or .inc extension.");
-        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item){
-            if (!$item->isDir() && (pathinfo($item, PATHINFO_EXTENSION) == 'php' || pathinfo($item, PATHINFO_EXTENSION) == 'inc')) {
+        $f->notes = __("This template does not need to be defined in PW - just the template file is sufficient.");
+        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item){
+            if (!$item->isDir() && in_array(pathinfo($item, PATHINFO_EXTENSION), array($this->wire('config')->templateExtension, 'php', 'inc'))) {
                 $f->addOption($iterator->getSubPathName(), $iterator->getSubPathName());
             }
         }
@@ -687,18 +689,18 @@ input[type='password'] {
      *
      */
     public function ___install() {
-        $permission = $this->permissions->get('page-edit-protected');
+        $permission = $this->wire('permissions')->get('page-edit-protected');
         if (!$permission->id) {
             $p = new Permission();
             $p->name = 'page-edit-protected';
             $p->title = $this->_('Access to set the protected status of pages (Page Protector Module)');
             $p->save();
             // tell the user we created this module's permission
-            $this->message($this->_("Created New Permission: page-edit-protected"));
-            $this->message($this->_("Assigned page-edit-protected permission to superuser"));
+            $this->wire()->message($this->_("Created New Permission: page-edit-protected"));
+            $this->wire()->message($this->_("Assigned page-edit-protected permission to superuser"));
         }
 
-        $su = $this->roles->get("superuser");
+        $su = $this->wire('roles')->get("superuser");
         $su->addPermission("page-edit-protected");
         $su->save();
     }
@@ -710,10 +712,10 @@ input[type='password'] {
      *
      */
     public function ___uninstall() {
-        $permission = $this->permissions->get('page-edit-protected');
+        $permission = $this->wire('permissions')->get('page-edit-protected');
         if ($permission->id) {
             $permission->delete();
-            $this->message($this->_("Deleted Permission: page-edit-protected"));
+            $this->wire()->message($this->_("Deleted Permission: page-edit-protected"));
         }
     }
 
