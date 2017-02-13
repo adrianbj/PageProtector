@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => '0.2.0',
+			'version' => '0.2.1',
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
@@ -40,7 +40,6 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
      *
      */
     protected $data = array();
-    protected $matchedParent = "";
 
     protected $protectOptions = array(
         "pid" => '',
@@ -146,6 +145,8 @@ input[type='password'] {
 
         $this->wire()->addHook('Page::protect', $this, 'protectPages');
 
+        $this->wire()->addHookProperty('Page::protected', $this, 'isProtected');
+
         if($this->wire('user')->hasPermission("page-edit-protected")) {
             $this->wire()->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
             $this->wire()->addHookAfter('ProcessPageEdit::processInput', $this, 'processPageProtectForm');
@@ -158,7 +159,9 @@ input[type='password'] {
 
         // if we get this far then add hook on page render to see if the page should be protected
         $this->wire()->addHookAfter('Page::render', $this, 'protectedCheck');
+
 	}
+
 
 
     public function hookPageViewable(HookEvent $event) {
@@ -188,21 +191,28 @@ input[type='password'] {
     }
 
 
-    public function isProtected($p) {
+    public function isProtected(HookEvent $event) {
+
+        $p = $event->object;
+
+        if($p->template == 'admin') return; // ignore admin pages including admin login page
+
+        $protected = 0;
         $pagesToCheck = array();
         $pagesToCheck[] = $p->id; // include current page
         foreach ($p->parents as $parent) $pagesToCheck[] = $parent->id; // add all parents of current page
-        foreach($pagesToCheck as $ptcid){
+
+        foreach($pagesToCheck as $ptcid) {
             $ptc = $this->wire('pages')->get($ptcid);
             if(array_key_exists($ptc->id, $this->data['protectedPages']) || ($this->data['protectHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->wire('config')->http404PageID)) {
                 // if we have a protected match for the current page or one of its parents have specified to protect its children
-                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->wire('config')->http404PageID)){
-                    $this->matchedParent = $ptc->id;
+                if($p->id == $ptc->id || ($p->id != $ptc->id && isset($this->data['protectedPages'][$ptc->id]) && (isset($this->data['protectedPages'][$ptc->id]['children']) && $this->data['protectedPages'][$ptc->id]['children'] == 1)) || ($this->data['protectHidden'] && $this->data['protectChildrenOfHidden'] && $ptc->hasStatus(Page::statusHidden) && $ptc->id != $this->wire('config')->http404PageID)) {
+                    $protected = $ptc->id;
                     break; // we have a match so no need to check other parents
                 }
             }
         }
-        return $this->matchedParent;
+        $event->return = $protected != "" ? $protected : false;
     }
 
 
@@ -216,7 +226,8 @@ input[type='password'] {
         $p = $event->object;
 
         if($p->template == 'admin') return; // ignore admin pages including admin login page
-        if($this->isProtected($p) == "") return; // if no matches, then escape now
+
+        if($p->protected == "") return; // if no matches, then escape now
 
         if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
@@ -226,11 +237,11 @@ input[type='password'] {
             $lang = '';
         }
 
-        if($this->wire('user')->isLoggedin()){
-            if(isset($this->data['protectedPages'][$this->matchedParent]) && $this->data['protectedPages'][$this->matchedParent]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$this->matchedParent]['roles']))) {
+        if($this->wire('user')->isLoggedin()) {
+            if(isset($this->data['protectedPages'][$p->protected]) && $this->data['protectedPages'][$p->protected]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$p->protected]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
-                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getText('prohibited_message', $lang))));
+                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($p, $this->getText('prohibited_message', $lang))));
                 }
                 else {
                     // no template form provided so hijack page output and display basic html login form
@@ -245,7 +256,7 @@ input[type='password'] {
                         <body>
                             <div class='page-protector-container'>
                             <p>" .
-                                nl2br($this->getText('prohibited_message', $lang)) .
+                                nl2br($this->getText($p, 'prohibited_message', $lang)) .
                             "</p>
                             </div>
                         </body>
@@ -259,13 +270,13 @@ input[type='password'] {
             if(!$user) $this->wire('session')->loginFailed = true;
             $this->wire('session')->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
         }
-        else{
+        else {
             $loginForm = "
                 <style>
                     {$this->data['logincss']}
                 </style>
                 <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
-                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText('message', $lang)) . "</legend>
+                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText($p, 'message', $lang)) . "</legend>
                         <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."' required />
                         <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."' required />
                         <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
@@ -274,7 +285,7 @@ input[type='password'] {
 
             if($this->wire('session')->loginFailed) $this->wire('session')->loginFailed = false;
 
-            if($this->data['login_template'] == ''){
+            if($this->data['login_template'] == '') {
                 $event->return = "
                 <!DOCTYPE html>
                     <head>
@@ -288,8 +299,8 @@ input[type='password'] {
                 </html>
                 ";
             }
-            else{
-                $p->loginForm = $loginForm; // added to allow support for latte (https://processwire.com/talk/topic/8387-page-protector/?do=findComment&comment=138638)
+            else {
+                $p->loginForm = $loginForm;
                 $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => $loginForm));
             }
         }
@@ -297,7 +308,7 @@ input[type='password'] {
 
 
 
-    public function buildPageProtectForm(HookEvent $event){
+    public function buildPageProtectForm(HookEvent $event) {
 
         $p = $event->object->getPage();
 
@@ -308,12 +319,12 @@ input[type='password'] {
         $fieldset->label = __("Protect this page");
         $fieldset->collapsed = Inputfield::collapsedBlank;
 
-        if($this->isProtected($p) != "" && $p->id != $this->isProtected($p)) {
+        if($p->protected != "" && $p->id != $p->protected) {
             $f = $this->wire('modules')->get("InputfieldMarkup");
             $f->attr('name', 'already_protected');
             $f->label = __('Already Protected');
             $f->value = "
-            <p>This page is already protected via its parent: " . $this->wire('pages')->get($this->isProtected($p))->title . "</p>
+            <p>This page is already protected via its parent: " . $this->wire('pages')->get($p->protected)->title . "</p>
             <p>However, you can still apply more specific protection to certain roles with the settings below.</p>
             ";
             $fieldset->append($f);
@@ -357,7 +368,7 @@ input[type='password'] {
         $f->showIf = "page_protected=1";
         $f->description = __("To limit access to specific roles, select them here.\nTo allow all roles, leave none selected.");
         $f->notes = __("NB The users with these roles still need to log in to view the page.\nThis allows you to completely block the unselected roles from viewing the page, even if they are logged in.");
-        foreach($this->wire('roles') as $role){
+        foreach($this->wire('roles') as $role) {
             $f->addOption($role->name, $role->name);
             if(isset($this->data['protectedPages'][$p->id]['roles']) && in_array($role->name, $this->data['protectedPages'][$p->id]['roles'])) $f->attr('value', $role->name);
         }
@@ -398,7 +409,7 @@ input[type='password'] {
     }
 
 
-    public function processPageProtectForm(HookEvent $event){
+    public function processPageProtectForm(HookEvent $event) {
 
         // ProcessPageEdit's processInput function may go recursive, so we want to skip
         // the instances where it does that by checking the second argument named "level"
@@ -432,20 +443,20 @@ input[type='password'] {
         $this->saveSettings($options);
     }
 
-    public function getText($textField, $lang) {
+    public function getText($p, $textField, $lang) {
 
         $text = '';
         $override = $textField == 'message' ? '_override' : '';
 
         if($lang == '') {
-            $text = isset($this->data['protectedPages'][$this->matchedParent][$textField.$override]) ? $this->data['protectedPages'][$this->matchedParent][$textField.$override] : $this->data[$textField];
+            $text = isset($this->data['protectedPages'][$p->protected][$textField.$override]) ? $this->data['protectedPages'][$p->protected][$textField.$override] : $this->data[$textField];
         }
         else {
-            if(isset($this->data['protectedPages'][$this->matchedParent][$textField.$override.$lang])) {
-                $text = $this->data['protectedPages'][$this->matchedParent][$textField.$override.$lang];
+            if(isset($this->data['protectedPages'][$p->protected][$textField.$override.$lang])) {
+                $text = $this->data['protectedPages'][$p->protected][$textField.$override.$lang];
             }
             if(!$text) {
-                $text = isset($this->data[$textField.$lang]) ? $this->data[$textField.$lang] : $this->data['protectedPages'][$this->matchedParent][$textField.$override];
+                $text = isset($this->data[$textField.$lang]) ? $this->data[$textField.$lang] : $this->data['protectedPages'][$p->protected][$textField.$override];
             }
             if(!$text) {
                 $text = $this->data[$textField];
@@ -668,9 +679,9 @@ input[type='password'] {
         $f = $this->wire('modules')->get("InputfieldSelect");
         $f->name = 'login_template';
         $f->label = 'Login Template';
-        $f->description = __('This is optional! It allows you to embed the login form within your site, rather than showing the login form on its own on a blank page. The login form will be inserted into the selected template. You must output the contents of the variable, $loginForm somewhere in the template, like:'."\n\n".'include("./head.inc");'."\n".'echo $loginForm;'."\n".'include("./foot.inc");');
-        $f->notes = __("This template does not need to be defined in PW - just the template file is sufficient.");
-        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item){
+        $f->description = __('This is optional! It allows you to embed the login form within your site, rather than showing the login form on its own on a blank page. The login form will be inserted into the selected template. You must output the contents of the variable, $loginForm (or $page->loginForm) somewhere in the template, like:'."\n\n".'include("./head.inc");'."\n".'echo $loginForm;'."\n".'include("./foot.inc");');
+        $f->notes = __("This template should not need to be defined in PW - just the file is sufficient. It is a dedicated file just for the login form.");
+        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item) {
             if (!$item->isDir() && in_array(pathinfo($item, PATHINFO_EXTENSION), array($this->wire('config')->templateExtension, 'php', 'inc'))) {
                 $f->addOption($iterator->getSubPathName(), $iterator->getSubPathName());
             }
