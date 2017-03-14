@@ -26,11 +26,14 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
 			'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
 			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => '0.2.2',
+			'version' => '1.0.1',
 			'permanent' => false,
 			'autoload' => true,
 			'singular' => true,
-            'icon' => 'key'
+            'icon' => 'key',
+            'permissions' => array(
+                'page-edit-protected' => 'Access to set the protected status of pages (Page Protector Module)'
+            )
 		);
 	}
 
@@ -691,44 +694,5 @@ input[type='password'] {
 
         return $wrapper;
     }
-
-
-    /**
-     * Called only when your module is installed
-     *
-     * Create a new permission.
-     *
-     */
-    public function ___install() {
-        $permission = $this->wire('permissions')->get('page-edit-protected');
-        if (!$permission->id) {
-            $p = new Permission();
-            $p->name = 'page-edit-protected';
-            $p->title = $this->_('Access to set the protected status of pages (Page Protector Module)');
-            $p->save();
-            // tell the user we created this module's permission
-            $this->wire()->message($this->_("Created New Permission: page-edit-protected"));
-            $this->wire()->message($this->_("Assigned page-edit-protected permission to superuser"));
-        }
-
-        $su = $this->wire('roles')->get("superuser");
-        $su->addPermission("page-edit-protected");
-        $su->save();
-    }
-
-    /**
-     * Called only when your module is uninstalled
-     *
-     * Remove the special permission
-     *
-     */
-    public function ___uninstall() {
-        $permission = $this->wire('permissions')->get('page-edit-protected');
-        if ($permission->id) {
-            $permission->delete();
-            $this->wire()->message($this->_("Deleted Permission: page-edit-protected"));
-        }
-    }
-
 
 }
