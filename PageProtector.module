@@ -17,25 +17,25 @@
 
 class PageProtector extends WireData implements Module, ConfigurableModule {
 
-	/**
-	 * Basic information about module
-	 */
-	public static function getModuleInfo() {
-		return array(
-			'title' => 'Page Protector',
-			'summary' => 'Allows site editors to protect pages from guest access.',
+    /**
+     * Basic information about module
+     */
+    public static function getModuleInfo() {
+        return array(
+            'title' => 'Page Protector',
+            'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
-			'href' => 'http://modules.processwire.com/modules/page-protector/',
-			'version' => '1.0.1',
-			'permanent' => false,
-			'autoload' => true,
-			'singular' => true,
+            'href' => 'http://modules.processwire.com/modules/page-protector/',
+            'version' => '1.0.2',
+            'permanent' => false,
+            'autoload' => true,
+            'singular' => true,
             'icon' => 'key',
             'permissions' => array(
                 'page-edit-protected' => 'Access to set the protected status of pages (Page Protector Module)'
             )
-		);
-	}
+        );
+    }
 
 
     /**
@@ -75,7 +75,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
                 "logincss" => "
 .page-protector-container {
     width: 400px;
-    max-width: 100%;
+    max-width: calc(100vw - 20px);
     height: 150px;
     margin: auto;
     position: absolute;
@@ -139,10 +139,10 @@ input[type='password'] {
     }
 
 
-	/**
-	 * Initialize the module and setup hooks
-	 */
-	public function init() {
+    /**
+     * Initialize the module and setup hooks
+     */
+    public function init() {
 
         $this->wire('config')->styles->add($this->wire('config')->urls->PageProtector . "PageProtector.css");
 
@@ -163,7 +163,7 @@ input[type='password'] {
         // if we get this far then add hook on page render to see if the page should be protected
         $this->wire()->addHookAfter('Page::render', $this, 'protectedCheck', array('priority'=>1000));
 
-	}
+    }
 
 
 
@@ -252,7 +252,7 @@ input[type='password'] {
                     <!DOCTYPE html>
                         <head>
                             <meta charset='utf-8' />
-			    <meta name='viewport' content='width=device-width, initial-scale=1'>
+                            <meta name='viewport' content='width=device-width, initial-scale=1'>
                             <style>
                                 {$this->data['logincss']}
                             </style>
@@ -294,7 +294,7 @@ input[type='password'] {
                 <!DOCTYPE html>
                     <head>
                         <meta charset='utf-8' />
-			<meta name='viewport' content='width=device-width, initial-scale=1'>
+                        <meta name='viewport' content='width=device-width, initial-scale=1'>
                     </head>
                     <body>
                         <div class='page-protector-container'>
