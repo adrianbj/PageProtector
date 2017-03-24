@@ -244,7 +244,7 @@ input[type='password'] {
             if(isset($this->data['protectedPages'][$p->protected]) && $this->data['protectedPages'][$p->protected]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$p->protected]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
-                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($p, $this->getText('prohibited_message', $lang))));
+                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getText($p, 'prohibited_message', $lang))));
                 }
                 else {
                     // no template form provided so hijack page output and display basic html login form
