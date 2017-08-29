@@ -3,7 +3,7 @@ Page Protector
 
 Processwire module to allow site editors to protect pages from guest access.
 
-###Functionality
+### Functionality
 
 * Ability for your site editors to control the user access to pages directly from Settings tab of each page
 * Include whether to protect all children of this page or not
@@ -15,7 +15,7 @@ Processwire module to allow site editors to protect pages from guest access.
 * Table in the module config settings that lists the details all of the protected pages
 * Shortcut to protect entire site with one click
 
-###API method
+### API method
 You can make changes to the protection settings of a page via the API
 
 ```
@@ -33,7 +33,7 @@ $options = array(
 $page->protect($options);
 ```
 
-####Support forum:
+#### Support forum:
 https://processwire.com/talk/topic/8387-page-protector/
 
 ## License

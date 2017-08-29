@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '1.0.3',
+            'version' => '1.0.4',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -321,8 +321,13 @@ input[type='password'] {
 
         $fieldset = $this->wire('modules')->get("InputfieldFieldset");
         $fieldset->attr('id', 'protect_fieldset');
-        $fieldset->label = __("Protect this page");
-        $fieldset->collapsed = Inputfield::collapsedBlank;
+        if(isset($this->data['protectedPages']) && array_key_exists($p->id, $this->data['protectedPages'])) {
+            $fieldset->label = __("Page Protector (protected)");
+        }
+        else {
+            $fieldset->label = __("Page Protector (not protected)");
+        }
+        $fieldset->collapsed = Inputfield::collapsedYes;
 
         if($p->protected != "" && $p->id != $p->protected) {
             $f = $this->wire('modules')->get("InputfieldMarkup");
