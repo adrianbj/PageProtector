@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '1.0.5',
+            'version' => '1.0.6',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -47,9 +47,9 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
     protected $protectOptions = array(
         "pid" => '',
         "page_protected" => false,
-        "children_protected" => false,
+        "children" => false,
         "message_override" => "",
-        "allowed_roles" => null,
+        "roles" => null,
         "prohibited_message" => "You do not have permission to view this page."
     );
 
@@ -348,7 +348,7 @@ input[type='password'] {
         $fieldset->append($f);
 
         $f = $this->wire('modules')->get('InputfieldCheckbox');
-        $f->attr('name', 'children_protected');
+        $f->attr('name', 'children');
         $f->label = __('Protect children');
         $f->showIf = "page_protected=1";
         $f->description = __('If checked, viewing of all children (and grandchildren etc) of this page will also be protected.');
@@ -373,7 +373,7 @@ input[type='password'] {
         $fieldset->add($f);
 
         $f = $this->wire('modules')->get("InputfieldAsmSelect");
-        $f->name = 'allowed_roles';
+        $f->name = 'roles';
         $f->label = 'Allowed Roles';
         $f->showIf = "page_protected=1";
         $f->description = __("To limit access to specific roles, select them here.\nTo allow all roles, leave none selected.");
@@ -432,8 +432,8 @@ input[type='password'] {
         $options = array(
             "pid" => $p->id,
             "page_protected" => $this->wire('input')->post->page_protected,
-            "children_protected" => $this->wire('input')->post->children_protected,
-            "allowed_roles" => $this->wire('input')->post->allowed_roles,
+            "children" => $this->wire('input')->post->children,
+            "roles" => $this->wire('input')->post->roles,
             "message_override" => $this->wire('input')->post->message_override,
             "prohibited_message" => $this->wire('input')->post->prohibited_message
         );
@@ -448,9 +448,22 @@ input[type='password'] {
                 }
             }
         }
+
         $options = array_merge($this->protectOptions, $options);
 
-        $this->saveSettings($options);
+        // create array of options and remove two keys so it can be compared to existing settings for this page
+        // if they don't match existing settings, or no settings exist, then save settings
+        $optionsToCompare = $options;
+        unset($optionsToCompare['pid']);
+        unset($optionsToCompare['page_protected']);
+
+        if(
+            (isset($this->data['protectedPages'][$p->id]) && !$options['page_protected']) ||
+            (!isset($this->data['protectedPages'][$p->id]) && $options['page_protected']) ||
+            (isset($this->data['protectedPages'][$p->id]) && $this->data['protectedPages'][$p->id] != $optionsToCompare)
+        ) {
+                $this->saveSettings($options);
+            }
     }
 
     public function getText($p, $textField, $lang) {
@@ -480,8 +493,8 @@ input[type='password'] {
         $pid = $options['pid'];
         unset($this->data['protectedPages'][$pid]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
         if((int) $options['page_protected'] == 1) {
-            $this->data['protectedPages'][$pid]['children'] = (int) $options['children_protected'];
-            $this->data['protectedPages'][$pid]['roles'] = $options['allowed_roles'];
+            $this->data['protectedPages'][$pid]['children'] = $options['children'];
+            $this->data['protectedPages'][$pid]['roles'] = $options['roles'];
 
             if($this->wire('languages')) {
                 foreach($this->wire('languages') as $lang) {
