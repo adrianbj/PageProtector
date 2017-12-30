@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '1.0.6',
+            'version' => '1.0.7',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -144,10 +144,7 @@ input[type='password'] {
      */
     public function init() {
 
-        $this->wire('config')->styles->add($this->wire('config')->urls->PageProtector . "PageProtector.css");
-
         $this->wire()->addHook('Page::protect', $this, 'protectPages');
-
         $this->wire()->addHookProperty('Page::protected', $this, 'isProtected');
 
         if($this->wire('user')->hasPermission("page-edit-protected")) {
@@ -164,7 +161,6 @@ input[type='password'] {
         $this->wire()->addHookAfter('Page::render', $this, 'protectedCheck', array('priority'=>1000));
 
     }
-
 
 
     public function hookPageViewable(HookEvent $event) {
@@ -520,6 +516,8 @@ input[type='password'] {
      *
      */
     public function getModuleConfigInputfields(array $data) {
+
+        $this->wire('config')->styles->add($this->wire('config')->urls->PageProtector . "PageProtector.css");
 
         $data = array_merge(self::getDefaultData(), $data);
 
