@@ -32,6 +32,12 @@ $options = array(
 $page->protect($options);
 ```
 
+You can also check the status of a page with:
+```
+$page->protected
+$page->prohibited
+```
+
 #### Support forum:
 https://processwire.com/talk/topic/8387-page-protector/
 

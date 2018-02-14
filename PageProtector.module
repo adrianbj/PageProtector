@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.2',
+            'version' => '2.0.3',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -145,7 +145,9 @@ input[type='password'] {
     public function init() {
 
         $this->wire()->addHook('Page::protect', $this, 'protectPages');
+
         $this->wire()->addHookProperty('Page::protected', $this, 'isProtected');
+        $this->wire()->addHookProperty('Page::prohibited', $this, 'isProhibited');
 
         if($this->wire('user')->hasPermission("page-edit-protected")) {
             $this->wire()->addHookAfter('ProcessPageEdit::buildFormSettings', $this, 'buildPageProtectForm');
@@ -220,6 +222,19 @@ input[type='password'] {
     }
 
 
+    public function isProhibited(HookEvent $event) {
+
+        $p = $event->object;
+        if($p->template == 'admin') return; // ignore admin pages including admin login page
+        if(isset($this->data['protectedPages']) && isset($this->data['protectedPages'][$p->protected]) && $this->data['protectedPages'][$p->protected]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$p->protected]['roles']))) {
+            $event->return = true;
+        }
+        else {
+            return false;
+        }
+    }
+
+
     /**
      * Checks if page is protected and show login form if necessary
      *
@@ -243,10 +258,10 @@ input[type='password'] {
         }
 
         if($this->wire('user')->isLoggedin()) {
-            if(isset($this->data['protectedPages'][$p->protected]) && $this->data['protectedPages'][$p->protected]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$p->protected]['roles']))) {
+            if($p->protected && $p->prohibited) {
                 if($this->data['login_template'] != '') {
-                    // using template login form
-                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getMessage($p, 'prohibited_message', $lang))));
+                    $p->loginForm = nl2br($this->getMessage($p, 'prohibited_message', $lang));
+                    $p->template->filename = $this->wire('config')->paths->templates . $this->data['login_template'];
                 }
                 else {
                     // no template form provided so hijack page output and display basic html login form
