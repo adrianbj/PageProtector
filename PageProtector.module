@@ -6,7 +6,7 @@
  *
  * Allows site editors to protect pages from guest access.
  *
- * ProcessWire 2.x
+ * ProcessWire 3.x
  * Copyright (C) 2011 by Ryan Cramer
  * Licensed under GNU/GPL v2, see LICENSE.TXT
  *
@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.1',
+            'version' => '2.0.2',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -246,7 +246,7 @@ input[type='password'] {
             if(isset($this->data['protectedPages'][$p->protected]) && $this->data['protectedPages'][$p->protected]['roles'] !== null && !$this->wire('user')->roles->has("name=".implode("|",$this->data['protectedPages'][$p->protected]['roles']))) {
                 if($this->data['login_template'] != '') {
                     // using template login form
-                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getText($p, 'prohibited_message', $lang))));
+                    $event->return = wireRenderFile($this->data['login_template'], array('loginForm' => nl2br($this->getMessage($p, 'prohibited_message', $lang))));
                 }
                 else {
                     // no template form provided so hijack page output and display basic html login form
@@ -262,7 +262,7 @@ input[type='password'] {
                         <body>
                             <div class='page-protector-container'>
                             <p>" .
-                                nl2br($this->getText($p, 'prohibited_message', $lang)) .
+                                nl2br($this->getMessage($p, 'prohibited_message', $lang)) .
                             "</p>
                             </div>
                         </body>
@@ -282,7 +282,7 @@ input[type='password'] {
                     {$this->data['logincss']}
                 </style>
                 <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
-                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getText($p, 'message', $lang)) . "</legend>
+                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getMessage($p, 'message', $lang)) . "</legend>
                         <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."' required />
                         <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."' required />
                         <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
@@ -467,7 +467,7 @@ input[type='password'] {
             }
     }
 
-    public function getText($p, $textField, $lang) {
+    public function ___getMessage($p, $textField, $lang) {
 
         $text = '';
         $override = $textField == 'message' ? '_override' : '';
