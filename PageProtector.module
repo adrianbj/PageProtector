@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.3',
+            'version' => '2.0.4',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -260,7 +260,12 @@ input[type='password'] {
         if($this->wire('user')->isLoggedin()) {
             if($p->protected && $p->prohibited) {
                 if($this->data['login_template'] != '') {
-                    $p->loginForm = nl2br($this->getMessage($p, 'prohibited_message', $lang));
+                    $p->loginForm = "
+                    <div class='page-protector-container'>
+                        <p>" .
+                            nl2br($this->getMessage($p, 'prohibited_message', $lang)) .
+                        "</p>
+                    </div>";
                     $p->template->filename = $this->wire('config')->paths->templates . $this->data['login_template'];
                 }
                 else {
@@ -276,9 +281,9 @@ input[type='password'] {
                         </head>
                         <body>
                             <div class='page-protector-container'>
-                            <p>" .
-                                nl2br($this->getMessage($p, 'prohibited_message', $lang)) .
-                            "</p>
+                                <p>" .
+                                    nl2br($this->getMessage($p, 'prohibited_message', $lang)) .
+                                "</p>
                             </div>
                         </body>
                     </html>";
