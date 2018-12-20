@@ -26,7 +26,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.4',
+            'version' => '2.0.5',
             'permanent' => false,
             'autoload' => true,
             'singular' => true,
@@ -530,7 +530,7 @@ input[type='password'] {
         }
 
         // save to config data with the rest of the settings
-        $this->wire('modules')->saveModuleConfigData($this->wire('modules')->get("PageProtector"), $this->data);
+        $this->wire('modules')->saveModuleConfigData($this, $this->data);
     }
 
     /**
@@ -557,7 +557,7 @@ input[type='password'] {
         unset($data['protectSite']);
 
         // save to config data with the rest of the settings
-        $this->wire('modules')->saveModuleConfigData($this->wire('modules')->get("PageProtector"), $data);
+        $this->wire('modules')->saveModuleConfigData($this, $data);
 
 
 
