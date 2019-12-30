@@ -6,12 +6,9 @@
  *
  * Allows site editors to protect pages from guest access.
  *
- * ProcessWire 3.x
- * Copyright (C) 2011 by Ryan Cramer
- * Licensed under GNU/GPL v2, see LICENSE.TXT
  *
- * http://www.processwire.com
- * http://www.ryancramer.com
+ * Copyright (C) 2019 by Adrian Jones
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
  *
  */
 
@@ -26,8 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.5',
-            'permanent' => false,
+            'version' => '2.0.6',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -386,7 +382,7 @@ input[type='password'] {
         if($this->wire('languages')) {
             foreach($this->wire('languages') as $lang) {
                 if($lang->isDefault()) continue;
-                $value = isset($this->data['protectedPages'][$p->id]['message_override__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['message_override__' . $lang->id] : isset($this->data['message__' . $lang->id]) ? $this->data['message__' . $lang->id] : '';
+                $value = isset($this->data['protectedPages'][$p->id]['message_override__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['message_override__' . $lang->id] : (isset($this->data['message__' . $lang->id]) ? $this->data['message__' . $lang->id] : '');
                 $f->set("value$lang->id", $value);
             }
         }
@@ -416,7 +412,7 @@ input[type='password'] {
         if($this->wire('languages')) {
             foreach($this->wire('languages') as $lang) {
                 if($lang->isDefault()) continue;
-                $value = isset($this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id] : isset($this->data['prohibited_message__' . $lang->id]) ? $this->data['prohibited_message__' . $lang->id] : '';
+                $value = isset($this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id]) ? $this->data['protectedPages'][$p->id]['prohibited_message__' . $lang->id] : (isset($this->data['prohibited_message__' . $lang->id]) ? $this->data['prohibited_message__' . $lang->id] : '');
                 $f->set("value$lang->id", $value);
             }
         }
@@ -567,7 +563,7 @@ input[type='password'] {
         $f->attr('name', 'instructions');
         $f->label = __('Instructions');
         $f->value = "";
-        if($this->wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<h3 style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</h3>";
+        if($this->wire('modules')->isInstalled("ProtectedMode")) $f->value .= "<p style='color:#990000'>You also have the ProtectedMode module installed. This module provides all the functionality of ProtectedMode, so it should be uninstalled when running this module.</p>";
         $f->value .= "
         <p>Go to the settings tab of a page and adjust the \"Protect this Page\" settings.";
         if(!isset($data['protectedPages'][1]) || !isset($data['protectedPages'][1]['children'])) {
@@ -584,38 +580,54 @@ input[type='password'] {
         $f->attr('name', 'table');
         $f->label = __('Protected Pages');
         $value = '';
-        if(empty($data['protectedPages'])) {
-            $value .= "<h3 style='color:#990000'>Currently no individual pages are protected. This does not include Hidden and Unpublished pages protected by the options below.</h2><h3 style='color:#990000'>To protect pages, you need to specify the pages (and optionally their children) to be protected from each page's Settings tab.</h3>";
+
+        if(!empty($data['protectedPages'])) {
+            $protectedPagesCount = $this->wire('pages')->count('id='.implode('|', array_keys($data['protectedPages'])));
         }
-        else{
-            $value .= "<h3 style='color:#009900'>Currently there " . (count($data['protectedPages']) >1 ? " are " : " is ") . count($data['protectedPages'])." protected parent page" . (count($data['protectedPages']) >1 ? "s" : "") . "</h3>";
+        else {
+            $protectedPagesCount = 0;
         }
 
-        $table = $this->wire('modules')->get("MarkupAdminDataTable");
-        $table->setEncodeEntities(false);
-        $table->setSortable(false);
-        $table->setClass('pageprotector');
-        $table->headerRow(array(
-            __('Title'),
-            __('Path'),
-            __('Children'),
-            __('Allowed Roles'),
-            __('Edit'),
-            __('View')
-        ));
-
-        foreach($data['protectedPages'] as $id => $details) {
-            $row = array(
-                $this->wire('pages')->get($id)->title,
-                $this->wire('pages')->get($id)->path,
-                (isset($details['children']) && $details['children'] == 1 ? 'Yes' : 'No'),
-                (!empty($details['roles']) ? implode(", ", $details['roles']) : 'ALL'),
-                '<a href="'.$this->wire('config')->urls->admin.'page/edit/?id='.$id.'#ProcessPageEditSettings">edit</a>',
-                '<a href="'.$this->wire('pages')->get($id)->url.'">view</a>'
-            );
-            $table->row($row);
+        if($protectedPagesCount === 0) {
+            $value .= "<p style='color:#990000'>Currently no individual pages are protected. This does not include Hidden and Unpublished pages protected by the options below.</p><p style='color:#990000'>To protect pages, you need to specify the pages, and optionally their children, to be protected from each page's Settings tab.</p>";
         }
-        $value .= $table->render();
+        else {
+            $value .= "<p style='color:#009900'>Currently there " . ($protectedPagesCount >1 ? " are " : " is ") . $protectedPagesCount." protected parent page" . ($protectedPagesCount >1 ? "s" : "") . "</p>";
+        }
+
+        if($protectedPagesCount > 0) {
+            $table = $this->wire('modules')->get("MarkupAdminDataTable");
+            $table->setEncodeEntities(false);
+            $table->setSortable(false);
+            $table->setClass('pageprotector');
+            $table->headerRow(array(
+                __('ID'),
+                __('Title'),
+                __('Path'),
+                __('Children'),
+                __('Allowed Roles'),
+                __('Edit'),
+                __('View')
+            ));
+
+            foreach($data['protectedPages'] as $id => $details) {
+                $p = $this->wire('pages')->get($id);
+                if($p->id) {
+                    $row = array(
+                        $id,
+                        $p->title,
+                        $p->path,
+                        (isset($details['children']) && $details['children'] == 1 ? 'Yes' : 'No'),
+                        (!empty($details['roles']) ? implode(", ", $details['roles']) : 'ALL'),
+                        '<a href="'.$this->wire('config')->urls->admin.'page/edit/?id='.$id.'#ProcessPageEditSettings">edit</a>',
+                        '<a href="'.$p->url.'">view</a>'
+                    );
+                    $table->row($row);
+                }
+            }
+            $value .= $table->render();
+
+        }
 
         $f->attr('value', $value);
         $wrapper->add($f);
@@ -629,7 +641,7 @@ input[type='password'] {
             $f->attr('checked', isset($data['protectSite']) && $data['protectSite'] ? 'checked' : '' );
             $wrapper->add($f);
         }
-        else{
+        else {
             $f = $this->wire('modules')->get("InputfieldHidden");
             $f->attr('name', 'protectSite');
             $f->value = 0;
