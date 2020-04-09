@@ -23,7 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.6',
+            'version' => '2.0.7',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -582,7 +582,7 @@ input[type='password'] {
         $value = '';
 
         if(!empty($data['protectedPages'])) {
-            $protectedPagesCount = $this->wire('pages')->count('id='.implode('|', array_keys($data['protectedPages'])));
+            $protectedPagesCount = $this->wire('pages')->count('include=all, id='.implode('|', array_keys($data['protectedPages'])));
         }
         else {
             $protectedPagesCount = 0;
