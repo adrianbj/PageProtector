@@ -23,7 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.7',
+            'version' => '2.0.8',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -214,7 +214,7 @@ input[type='password'] {
                 }
             }
         }
-        $event->return = $protected != "" ? $protected : false;
+        $event->return = $protected != 0 ? $protected : false;
     }
 
 
@@ -243,7 +243,7 @@ input[type='password'] {
 
         if($p->template == 'admin') return; // ignore admin pages including admin login page
 
-        if($p->protected == "") return; // if no matches, then escape now
+        if($p->protected == 0) return; // if no matches, then escape now
 
         if($this->wire('languages')) {
             $userLanguage = $this->wire('user')->language;
@@ -338,7 +338,7 @@ input[type='password'] {
 
         $fieldset = $this->wire('modules')->get("InputfieldFieldset");
         $fieldset->attr('id', 'protect_fieldset');
-        if($p->protected != "") {
+        if($p->protected != 0) {
             $fieldset->label = __("Page Protector (protected)");
         }
         else {
@@ -346,7 +346,7 @@ input[type='password'] {
         }
         $fieldset->collapsed = Inputfield::collapsedYes;
 
-        if($p->protected != "" && $p->id != $p->protected) {
+        if($p->protected != 0 && $p->id != $p->protected) {
             $f = $this->wire('modules')->get("InputfieldMarkup");
             $f->attr('name', 'already_protected');
             $f->label = __('Already Protected');
