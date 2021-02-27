@@ -301,6 +301,9 @@ input[type='password'] {
                 $tfa = $user->hasTfa(true);
                 // get the actual Tfa instance we need
                 $this->wire('session')->loginFailed = !$tfa->start($username, $this->wire('input')->post->pass);
+                if ($this->wire('session')->loginFailed) {
+                    $this->wire('session')->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
+                }
                 //tfa login supercedes normal login function
             }
             else {
