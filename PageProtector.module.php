@@ -288,43 +288,99 @@ input[type='password'] {
         }
         elseif($this->wire('input')->post->username && $this->wire('input')->post->pass) {
             $username = $this->wire('sanitizer')->username($this->wire('input')->post->username);
-            $user = $this->wire('session')->login($username, $this->wire('input')->post->pass);
-            if(!$user) $this->wire('session')->loginFailed = true;
-            $this->wire('session')->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
-        }
-        else {
-            $loginForm = "
-                <style>
-                    {$this->data['logincss']}
-                </style>
-                <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
-                        <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getMessage($p, 'message', $lang)) . "</legend>
-                        <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."' required />
-                        <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."' required />
-                        <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
-                </form>
-            ";
+            $user = $this->wire('users')->get($username);
+            $has_tfa = false;
 
-            if($this->wire('session')->loginFailed) $this->wire('session')->loginFailed = false;
+            // if the user exist, override the $has_tfa var with a not dummy value
+            if ($user->id) {
+                $has_tfa = $user->hasTfa();
+            }
 
-            if($this->data['login_template'] == '') {
-                $event->return = "
-                <!DOCTYPE html>
-                    <head>
-                        <meta charset='utf-8' />
-                        <meta name='viewport' content='width=device-width, initial-scale=1'>
-                    </head>
-                    <body>
-                        <div class='page-protector-container'>
-                            $loginForm
-                        </div>
-                    </body>
-                </html>
-                ";
+            if (!empty($has_tfa)) {
+                // $tfa = $this->wire('modules')->get('ProcessLogin')->getTfa();
+                $tfa = $user->hasTfa(true);
+                // get the actual Tfa instance we need
+                $this->wire('session')->loginFailed = !$tfa->start($username, $this->wire('input')->post->pass);
+                //tfa login supercedes normal login function
             }
             else {
-                $p->loginForm = $loginForm;
-                $p->template->filename = $this->wire('config')->paths->templates . $this->data['login_template'];
+                $user = $this->wire('session')->login($username, $this->wire('input')->post->pass);
+                if(!$user) $this->wire('session')->loginFailed = true;
+                $this->wire('session')->redirect(htmlspecialchars($_SERVER['REQUEST_URI']));
+            }
+        }
+        else {
+            $tfa = $this->wire('modules')->get('ProcessLogin')->getTfa();
+
+            if (!empty($tfa) && $tfa->active()) {
+                if ($tfa->success()) {
+                    //do nothing?
+                    //TFA Session success;
+                }
+                else {
+                    //Put TFA form in template for completion
+                    if ($this->data['login_template'] != '')  {
+                        $p->loginForm = "
+                        <style>
+                            {$this->data['logincss']}
+                        </style>" .
+                        '<div class="page-protector-container">' .
+                        $tfa->render() .
+                        '</div>';                        $p->template->filename = $this->wire('config')->paths->templates . $this->data['login_template'];
+                    } else {
+                        $event->return = "
+                        <!DOCTYPE html>
+                        <head>
+                            <meta charset='utf-8' />
+                            <meta name='viewport' content='width=device-width, initial-scale=1'>
+                            <style>
+                                {$this->data['logincss']}
+                            </style>
+                        </head>
+                        <body>
+                            <div class='page-protector-container'>
+                                <p>" . $tfa->render() .
+                                "</p>
+                            </div>
+                        </body>
+                        </html>";
+                    }
+                }
+            }
+            else {
+                $loginForm = "
+                    <style>
+                        {$this->data['logincss']}
+                    </style>
+                    <form class='PageProtectorForm' action='".htmlspecialchars($_SERVER['REQUEST_URI'])."' method='post'>
+                            <legend>" . ($this->wire('session')->loginFailed ? "<p>" . __("Login Failed, please try again!") . "</p>" : "") . nl2br($this->getMessage($p, 'message', $lang)) . "</legend>
+                            <input type='text' name='username' placeholder='".($this->data['usernamePlaceholder'.$lang] ? $this->data['usernamePlaceholder'.$lang] : $this->data['usernamePlaceholder'])."' required />
+                            <input type='password' name='pass' placeholder='".($this->data['passwordPlaceholder'.$lang] ? $this->data['passwordPlaceholder'.$lang] : $this->data['passwordPlaceholder'])."' required />
+                            <p><button type='submit' name='login'>".($this->data['loginButtonText'.$lang] ? $this->data['loginButtonText'.$lang] : $this->data['loginButtonText'])."</button></p>
+                    </form>
+                ";
+
+                if($this->wire('session')->loginFailed) $this->wire('session')->loginFailed = false;
+
+                if($this->data['login_template'] == '') {
+                    $event->return = "
+                    <!DOCTYPE html>
+                        <head>
+                            <meta charset='utf-8' />
+                            <meta name='viewport' content='width=device-width, initial-scale=1'>
+                        </head>
+                        <body>
+                            <div class='page-protector-container'>
+                                $loginForm
+                            </div>
+                        </body>
+                    </html>
+                    ";
+                }
+                else {
+                    $p->loginForm = $loginForm;
+                    $p->template->filename = $this->wire('config')->paths->templates . $this->data['login_template'];
+                }
             }
         }
     }
@@ -751,3 +807,4 @@ input[type='password'] {
     }
 
 }
+
