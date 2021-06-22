@@ -23,7 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.8',
+            'version' => '2.0.9',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -186,9 +186,9 @@ input[type='password'] {
         }
 
         if($p->hasStatus(Page::statusUnpublished) || $parentUnpublished) {
-            $p->removeStatus(Page::statusUnpublished);
-            $this->data['protectedPages'][$p->id]['roles'] = null;
-            $this->data['protectedPages'][$p->id]['prohibited_message'] = $this->options['prohibited_message'];
+            if(isset($this->data['protectedPages'][$p->id])) {
+                $p->removeStatus(Page::statusUnpublished);
+            }
         }
     }
 
@@ -425,11 +425,11 @@ input[type='password'] {
     }
 
     public function protectPages(HookEvent $event) {
-        $page = $event->object;
+        $p = $event->object;
         $options = $event->arguments(0);
 
         $options = array_merge($this->protectOptions, $options);
-        $options['pid'] = $page->id;
+        $options['pid'] = $p->id;
         if($options['message_override'] == '') $options['message_override'] = $this->data['message'];
 
         $this->saveSettings($options);
