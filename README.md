@@ -24,7 +24,7 @@ You can make changes to the protection settings of a page via the API
 $options = array(
     "page_protected" => true,
     "children_protected" => true,
-    "allowed_roles" => array("role1", "role2"),
+    "roles" => array("role1", "role2"),
     "message_override" => "My custom login message",
     "prohibited_message" => "My custom prohibited access message"
 );
