@@ -1,4 +1,4 @@
-<?php
+<?php namespace ProcessWire;
 
 /**
  * ProcessWire module to allow site editors to protect pages from guest access.
@@ -23,7 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.0.9',
+            'version' => '2.1.0',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -507,6 +507,7 @@ input[type='password'] {
     }
 
     public function saveSettings($options) {
+        wire('log')->save('testing', json_encode($options));
         $pid = $options['pid'];
         unset($this->data['protectedPages'][$pid]); // remove existing record for this page - need a clear slate for adding new settings or if it was just disabled
         if((int) $options['page_protected'] == 1) {
@@ -516,8 +517,8 @@ input[type='password'] {
             if($this->wire('languages')) {
                 foreach($this->wire('languages') as $lang) {
                     if(!$lang->isDefault()) {
-                        $this->data['protectedPages'][$pid]['message_override__'.$lang->id] = $options['message_override__'.$lang->id];
-                        $this->data['protectedPages'][$pid]['prohibited_message__'.$lang->id] = $options['prohibited_message__'.$lang->id];
+                        $this->data['protectedPages'][$pid]['message_override__'.$lang->id] = isset($options['message_override__'.$lang->id]) ? $options['message_override__'.$lang->id] : '';
+                        $this->data['protectedPages'][$pid]['prohibited_message__'.$lang->id] = isset($options['prohibited_message__'.$lang->id]) ? $options['prohibited_message__'.$lang->id] : '';
                     }
                 }
             }
