@@ -23,7 +23,7 @@ class PageProtector extends WireData implements Module, ConfigurableModule {
             'summary' => 'Allows site editors to protect pages from guest access.',
             'author' => 'Adrian Jones',
             'href' => 'http://modules.processwire.com/modules/page-protector/',
-            'version' => '2.1.0',
+            'version' => '2.1.1',
             'autoload' => true,
             'singular' => true,
             'icon' => 'key',
@@ -740,7 +740,7 @@ input[type='password'] {
         $f->label = 'Login Template';
         $f->description = __('This is optional! It allows you to embed the login form within your site, rather than showing the login form on its own on a blank page. The login form will be inserted into the selected template. You must output `$page->loginForm` somewhere in the template, like:```'."\n\n".'include("./head.inc");'."\n".'echo $page->loginForm;'."\n".'include("./foot.inc");```');
         $f->notes = __("This template does not need to be defined in PW - just a file is sufficient. It is a dedicated file just for the login form.");
-        foreach($iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->wire('config')->paths->templates, RecursiveDirectoryIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $item) {
+        foreach($iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->wire('config')->paths->templates, \RecursiveDirectoryIterator::SKIP_DOTS), \RecursiveIteratorIterator::SELF_FIRST) as $item) {
             if (!$item->isDir() && in_array(pathinfo($item, PATHINFO_EXTENSION), array($this->wire('config')->templateExtension, 'php', 'inc'))) {
                 $f->addOption($iterator->getSubPathName(), $iterator->getSubPathName());
             }
